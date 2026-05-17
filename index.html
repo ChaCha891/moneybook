@@ -125,8 +125,8 @@
     </div>
 
     <section class="summary">
-      <div class="summary-card"><div class="label">총수입</div><div id="totalIncome" class="value income">0원</div></div>
-      <div class="summary-card"><div class="label">총지출</div><div id="totalExpense" class="value expense">0원</div></div>
+      <div class="summary-card"><div class="label"><span id="incomeSummaryLabel">총수입</span></div><select id="incomeSummaryCategory" onchange="renderSummary()" style="margin-bottom:8px;"></select><div id="totalIncome" class="value income">0원</div></div>
+      <div class="summary-card"><div class="label"><span id="expenseSummaryLabel">총지출</span></div><select id="expenseSummaryCategory" onchange="renderSummary()" style="margin-bottom:8px;"></select><div id="totalExpense" class="value expense">0원</div></div>
       <div class="summary-card"><div class="label">잔액</div><div id="totalBalance" class="value balance">0원</div></div>
     </section>
 
@@ -197,8 +197,8 @@
   </div></div>
 
   <script>
-    const SUPABASE_URL = "https://yajvtppzhajpexvpqvnv.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhanZ0cHB6aGFqcGV4dnBxdm52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzA1MTksImV4cCI6MjA5NDQ0NjUxOX0.D4bRjAgYBqsVuOeJYk0v0gaaStr5QRm6TSHa3NHYTao";
+    const SUPABASE_URL = "https://widvjrtvjjuvknpjujkf.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZHZqcnR2amp1dmtucGp1amtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODY0NzIsImV4cCI6MjA5NDA2MjQ3Mn0.ThmHVS56_yf1L3yGq8sJHBtSiLHu8javo5aboqwvKBA";
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentDate = new Date();
@@ -250,7 +250,39 @@
     }
 
     function renderAll() { renderSummary(); renderCalendar(); }
-    function renderSummary() { const income=entries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0); const expense=entries.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0); totalIncome.textContent=money(income); totalExpense.textContent=money(expense); totalBalance.textContent=money(income-expense); }
+    function renderSummary() {
+      renderSummaryCategoryOptions();
+
+      const incomeCategory = incomeSummaryCategory.value;
+      const expenseCategory = expenseSummaryCategory.value;
+
+      const incomeList = entries.filter(e => e.type === "income" && (incomeCategory === "all" || e.category === incomeCategory));
+      const expenseList = entries.filter(e => e.type === "expense" && (expenseCategory === "all" || e.category === expenseCategory));
+
+      const totalIncomeAll = entries.filter(e => e.type === "income").reduce((s,e)=>s+Number(e.amount),0);
+      const totalExpenseAll = entries.filter(e => e.type === "expense").reduce((s,e)=>s+Number(e.amount),0);
+      const income = incomeList.reduce((s,e)=>s+Number(e.amount),0);
+      const expense = expenseList.reduce((s,e)=>s+Number(e.amount),0);
+
+      incomeSummaryLabel.textContent = incomeCategory === "all" ? "총수입" : incomeCategory;
+      expenseSummaryLabel.textContent = expenseCategory === "all" ? "총지출" : expenseCategory;
+      totalIncome.textContent = money(income);
+      totalExpense.textContent = money(expense);
+      totalBalance.textContent = money(totalIncomeAll - totalExpenseAll);
+    }
+
+    function renderSummaryCategoryOptions() {
+      const prevIncome = incomeSummaryCategory.value || "all";
+      const prevExpense = expenseSummaryCategory.value || "all";
+      const incomeCategories = categories.filter(c => c.type === "income").map(c => c.name);
+      const expenseCategories = categories.filter(c => c.type === "expense").map(c => c.name);
+
+      incomeSummaryCategory.innerHTML = `<option value="all">전체 수입</option>` + incomeCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      expenseSummaryCategory.innerHTML = `<option value="all">전체 지출</option>` + expenseCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+
+      incomeSummaryCategory.value = incomeCategories.includes(prevIncome) ? prevIncome : "all";
+      expenseSummaryCategory.value = expenseCategories.includes(prevExpense) ? prevExpense : "all";
+    }
 
     function renderCalendar() {
       const { y, m } = monthRange(); monthTitle.textContent = `${y}년 ${m + 1}월`;
@@ -263,7 +295,7 @@
         const income = dayEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
         const expense = dayEntries.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0);
         const div=document.createElement("div"); div.className="day"; div.onclick=()=>openDayModal(dateStr);
-        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>지출</span><span>${expense?money(expense):"-"}</span></div><div class="day-total">잔액 ${money(income-expense)}</div>`;
+        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>지출</span><span>${expense?money(expense):"-"}</span></div>`;
         calendarDays.appendChild(div);
       }
     }
