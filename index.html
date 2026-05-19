@@ -72,7 +72,6 @@
     .day.empty { background: #f9fafb; cursor: default; }
     .date-num { font-weight: 900; margin-bottom: 8px; }
     .day-line { font-size: 13px; margin-top: 4px; display: flex; justify-content: space-between; gap: 6px; }
-    .day-entry-line { margin-top: 5px; padding: 5px 6px; border-radius: 8px; font-size: 12px; font-weight: 800; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .day-total { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-weight: 900; font-size: 13px; }
 
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
@@ -378,8 +377,7 @@
         const income = dayEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
         const expense = dayEntries.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
         const div=document.createElement("div"); div.className="day"; div.onclick=()=>openDayModal(dateStr);
-        const detailLines = dayEntries.map(e => `<div class="day-entry-line" style="${getEntryRowBgStyle(e)}">${getEntryTypeLabel(e)} - ${escapeHtml(e.category)} - ${money(e.amount)}</div>`).join("");
-        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>사용금액</span><span>${expense?money(expense):"-"}</span></div>${detailLines}`;
+        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>사용금액</span><span>${expense?money(expense):"-"}</span></div>`;
         calendarDays.appendChild(div);
       }
     }
@@ -414,7 +412,7 @@
 
     function openDayModal(dateStr) {
       selectedDate = dateStr; const dayEntries = entries.filter(e => e.entry_date === dateStr); dayModalTitle.textContent = `${dateStr} 내역`;
-      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row"><span class="${e.type === "income" ? "income" : "expense"}">${e.type === "income" ? "수입" : (isFixedEntry(e) ? "고정비" : (isTransferEntry(e) ? "돈옮김" : "지출"))}</span><strong>${escapeHtml(e.category)}</strong><span>${escapeHtml(e.memo || "-")}</span><strong>${money(e.amount)}</strong><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
+      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row" style="${getEntryRowBgStyle(e)}"><span>${entryTypeBadge(e)}</span><strong>${escapeHtml(e.category)}</strong><span>${escapeHtml(e.memo || "-")}</span><strong>${money(e.amount)}</strong><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
       dayModal.classList.add("show");
     }
     function editEntry(entry) { closeModal("dayModal"); closeModal("historyModal"); openEntryModal(null, entry); }
