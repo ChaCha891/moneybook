@@ -152,6 +152,7 @@
       <div><label>구분</label><select id="entryType" onchange="renderCategorySelect()"><option value="income">수입</option><option value="expense">지출</option></select></div>
       <div><label>카테고리</label><select id="entryCategory"></select></div>
       <div><label>금액</label><input type="number" id="entryAmount" placeholder="예: 50000" /></div>
+      <div><label>고정비 여부</label><select id="entryFixed"><option value="false">일반 사용금액</option><option value="true">고정비</option></select></div>
       <div class="full"><label>메모</label><textarea id="entryMemo" placeholder="내용을 입력하세요"></textarea></div>
     </div>
     <div class="modal-actions"><button class="danger" id="deleteEntryBtn" onclick="deleteEntry()" style="display:none;">삭제</button><button class="light" onclick="closeModal('entryModal')">닫기</button><button onclick="saveEntry()">저장</button></div>
@@ -197,8 +198,8 @@
   </div></div>
 
   <script>
-    const SUPABASE_URL = "https://yajvtppzhajpexvpqvnv.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhanZ0cHB6aGFqcGV4dnBxdm52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzA1MTksImV4cCI6MjA5NDQ0NjUxOX0.D4bRjAgYBqsVuOeJYk0v0gaaStr5QRm6TSHa3NHYTao";
+    const SUPABASE_URL = "여기에_SUPABASE_URL_입력";
+    const SUPABASE_ANON_KEY = "여기에_SUPABASE_ANON_KEY_입력";
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentDate = new Date();
@@ -250,6 +251,18 @@
     }
 
     function renderAll() { renderSummary(); renderCalendar(); }
+    function isTransferEntry(e) {
+      return e.type === "expense" && String(e.category || "").trim() === "돈옮김";
+    }
+
+    function isFixedEntry(e) {
+      return e.type === "expense" && e.is_fixed === true;
+    }
+
+    function isUserSpendEntry(e) {
+      return e.type === "expense" && !isFixedEntry(e) && !isTransferEntry(e);
+    }
+
     function renderSummary() {
       renderSummaryCategoryOptions();
 
@@ -257,10 +270,10 @@
       const expenseCategory = expenseSummaryCategory.value;
 
       const incomeList = entries.filter(e => e.type === "income" && (incomeCategory === "all" || e.category === incomeCategory));
-      const expenseList = entries.filter(e => e.type === "expense" && (expenseCategory === "all" || e.category === expenseCategory));
+      const expenseList = entries.filter(e => isUserSpendEntry(e) && (expenseCategory === "all" || e.category === expenseCategory));
 
       const totalIncomeAll = entries.filter(e => e.type === "income").reduce((s,e)=>s+Number(e.amount),0);
-      const totalExpenseAll = entries.filter(e => e.type === "expense").reduce((s,e)=>s+Number(e.amount),0);
+      const balanceExpenseAll = entries.filter(e => e.type === "expense" && !isTransferEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       const income = incomeList.reduce((s,e)=>s+Number(e.amount),0);
       const expense = expenseList.reduce((s,e)=>s+Number(e.amount),0);
 
@@ -268,7 +281,7 @@
       expenseSummaryLabel.textContent = expenseCategory === "all" ? "총지출" : expenseCategory;
       totalIncome.textContent = money(income);
       totalExpense.textContent = money(expense);
-      totalBalance.textContent = money(totalIncomeAll - totalExpenseAll);
+      totalBalance.textContent = money(totalIncomeAll - balanceExpenseAll);
     }
 
     function renderSummaryCategoryOptions() {
@@ -293,9 +306,9 @@
         const dateStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
         const dayEntries = entries.filter(e => e.entry_date === dateStr);
         const income = dayEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
-        const expense = dayEntries.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0);
+        const expense = dayEntries.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
         const div=document.createElement("div"); div.className="day"; div.onclick=()=>openDayModal(dateStr);
-        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>지출</span><span>${expense?money(expense):"-"}</span></div>`;
+        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>사용금액</span><span>${expense?money(expense):"-"}</span></div>`;
         calendarDays.appendChild(div);
       }
     }
@@ -304,7 +317,7 @@
 
     function openEntryModal(date = null, entry = null) {
       entryModalTitle.textContent = entry ? "내역 수정" : "내역 입력";
-      entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = entry?.type || "expense"; entryAmount.value = entry?.amount || ""; entryMemo.value = entry?.memo || "";
+      entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = entry?.type || "expense"; entryAmount.value = entry?.amount || ""; entryFixed.value = entry?.is_fixed === true ? "true" : "false"; entryMemo.value = entry?.memo || "";
       renderCategorySelect(entry?.category || ""); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
     }
 
@@ -315,7 +328,7 @@
 
     async function saveEntry() {
       const id = entryId.value;
-      const payload = { entry_date: entryDate.value, type: entryType.value, category: entryCategory.value, amount: Number(entryAmount.value), memo: entryMemo.value.trim() };
+      const payload = { entry_date: entryDate.value, type: entryType.value, category: entryCategory.value, amount: Number(entryAmount.value), is_fixed: entryType.value === "expense" && entryFixed.value === "true", memo: entryMemo.value.trim() };
       if (!payload.entry_date || !payload.category || !payload.amount || payload.amount <= 0) { alert("날짜, 카테고리, 금액을 정확히 입력하세요."); return; }
       let error; if (id) ({ error } = await db.from("moneybook_entries").update(payload).eq("id", id)); else ({ error } = await db.from("moneybook_entries").insert(payload));
       if (error) { alert("저장 오류: " + error.message); return; }
@@ -330,7 +343,7 @@
 
     function openDayModal(dateStr) {
       selectedDate = dateStr; const dayEntries = entries.filter(e => e.entry_date === dateStr); dayModalTitle.textContent = `${dateStr} 내역`;
-      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row"><span class="${e.type === "income" ? "income" : "expense"}">${e.type === "income" ? "수입" : "지출"}</span><strong>${escapeHtml(e.category)}</strong><span>${escapeHtml(e.memo || "-")}</span><strong>${money(e.amount)}</strong><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
+      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row"><span class="${e.type === "income" ? "income" : "expense"}">${e.type === "income" ? "수입" : (isFixedEntry(e) ? "고정비" : (isTransferEntry(e) ? "돈옮김" : "지출"))}</span><strong>${escapeHtml(e.category)}</strong><span>${escapeHtml(e.memo || "-")}</span><strong>${money(e.amount)}</strong><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
       dayModal.classList.add("show");
     }
     function editEntry(entry) { closeModal("dayModal"); closeModal("historyModal"); openEntryModal(null, entry); }
@@ -341,9 +354,9 @@
       let list = [...entries].sort((a,b) => (a.entry_date < b.entry_date ? 1 : -1));
       if (type !== "all") list = list.filter(e => e.type === type);
       if (keyword) list = list.filter(e => `${e.category} ${e.memo || ""}`.toLowerCase().includes(keyword));
-      const income = list.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0); const expense = list.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0);
+      const income = list.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0); const expense = list.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       historySummary.innerHTML = `<span>검색결과 ${list.length}건</span><span class="income">수입 ${money(income)}</span><span class="expense">지출 ${money(expense)}</span><span class="balance">잔액 ${money(income-expense)}</span>`;
-      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => `<tr><td>${e.entry_date}</td><td class="${e.type === "income" ? "income" : "expense"}">${e.type === "income" ? "수입" : "지출"}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.memo || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
+      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => `<tr><td>${e.entry_date}</td><td class="${e.type === "income" ? "income" : "expense"}">${e.type === "income" ? "수입" : (isFixedEntry(e) ? "고정비" : (isTransferEntry(e) ? "돈옮김" : "지출"))}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.memo || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
     }
 
     function openCategoryModal() { renderCategoryManager(); categoryModal.classList.add("show"); }
@@ -354,7 +367,7 @@
 
     function openChartModal() { chartModal.classList.add("show"); renderChart(); }
     function renderChart() {
-      const expenseEntries = entries.filter(e => e.type === "expense"); const grouped = {}; expenseEntries.forEach(e => grouped[e.category] = (grouped[e.category] || 0) + Number(e.amount));
+      const expenseEntries = entries.filter(e => isUserSpendEntry(e)); const grouped = {}; expenseEntries.forEach(e => grouped[e.category] = (grouped[e.category] || 0) + Number(e.amount));
       const labels = Object.keys(grouped), values = Object.values(grouped); chartEmpty.style.display = labels.length ? "none" : "block"; if (chartInstance) chartInstance.destroy(); if (!labels.length) return;
       chartInstance = new Chart(categoryChart, { type: "pie", data: { labels, datasets: [{ data: values }] }, options: { plugins: { tooltip: { callbacks: { label: ctx => { const total=values.reduce((a,b)=>a+b,0), value=ctx.raw, percent=total?Math.round(value/total*100):0; return `${ctx.label}: ${money(value)} (${percent}%)`; } } } } } });
     }
