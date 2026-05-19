@@ -507,14 +507,13 @@
       const lastDay = new Date(y, m + 1, 0).getDate();
       const transferDay = Math.min(Number(item.transfer_day || 1), lastDay);
       const targetDate = `${y}-${String(m + 1).padStart(2, "0")}-${String(transferDay).padStart(2, "0")}`;
-      const transferMemo = item.memo ? `[이체완료] ${item.memo}` : "[이체완료]";
+      const transferMemo = item.memo || "";
 
       const duplicate = entries.find(e =>
         e.entry_date === targetDate &&
         e.type === "expense" &&
         e.category === item.category &&
-        Number(e.amount) === Number(item.amount) &&
-        String(e.memo || "").includes("[이체완료]")
+        Number(e.amount) === Number(item.amount)
       );
 
       if (duplicate) {
@@ -535,7 +534,7 @@
 
       const { error } = await db.from("moneybook_entries").insert(payload);
       if (error) { alert("이체완료 반영 오류: " + error.message); return; }
-      alert("이체완료 내역이 지정 날짜에 반영되었습니다.");
+      alert("이체완료. 내역에 반영되었습니다.");
       await loadData();
     }
 
