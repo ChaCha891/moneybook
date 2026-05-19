@@ -503,25 +503,45 @@
     }
 
     async function completeFixedTransfer(item) {
-      if (!confirm(`${item.category} ${money(item.amount)} 이체완료 처리할까요?`)) return;
-      const today = ymd(new Date());
+      const { y, m } = monthRange();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const transferDay = Math.min(Number(item.transfer_day || 1), lastDay);
+      const targetDate = `${y}-${String(m + 1).padStart(2, "0")}-${String(transferDay).padStart(2, "0")}`;
+      const transferMemo = item.memo ? `[이체완료] ${item.memo}` : "[이체완료]";
+
+      const duplicate = entries.find(e =>
+        e.entry_date === targetDate &&
+        e.type === "expense" &&
+        e.category === item.category &&
+        Number(e.amount) === Number(item.amount) &&
+        String(e.memo || "").includes("[이체완료]")
+      );
+
+      if (duplicate) {
+        alert(`${targetDate}에 이미 같은 이체완료 내역이 있습니다.`);
+        return;
+      }
+
+      if (!confirm(`${targetDate} 날짜로 ${item.category} ${money(item.amount)} 이체완료 처리할까요?`)) return;
+
       const payload = {
-        entry_date: today,
+        entry_date: targetDate,
         type: "expense",
         category: item.category,
         amount: Number(item.amount),
         is_fixed: true,
-        memo: item.memo ? `[이체완료] ${item.memo}` : "[이체완료]"
+        memo: transferMemo
       };
+
       const { error } = await db.from("moneybook_entries").insert(payload);
       if (error) { alert("이체완료 반영 오류: " + error.message); return; }
-      alert("이체완료 내역이 지출에 반영되었습니다.");
+      alert("이체완료 내역이 지정 날짜에 반영되었습니다.");
       await loadData();
     }
 
     function openChartModal() { chartModal.classList.add("show"); renderChart(); }
     function renderChart() {
-      const expenseEntries = entries.filter(e => isUserSpendEntry(e)); const grouped = {}; expenseEntries.forEach(e => grouped[e.category] = (grouped[e.category] || 0) + Number(e.amount));
+      const expenseEntries = entries.filter(e => e.type === "expense"); const grouped = {}; expenseEntries.forEach(e => grouped[e.category] = (grouped[e.category] || 0) + Number(e.amount));
       const labels = Object.keys(grouped), values = Object.values(grouped); chartEmpty.style.display = labels.length ? "none" : "block"; if (chartInstance) chartInstance.destroy(); if (!labels.length) return;
       chartInstance = new Chart(categoryChart, { type: "pie", data: { labels, datasets: [{ data: values }] }, options: { plugins: { tooltip: { callbacks: { label: ctx => { const total=values.reduce((a,b)=>a+b,0), value=ctx.raw, percent=total?Math.round(value/total*100):0; return `${ctx.label}: ${money(value)} (${percent}%)`; } } } } } });
     }
