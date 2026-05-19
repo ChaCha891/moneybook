@@ -72,6 +72,7 @@
     .day.empty { background: #f9fafb; cursor: default; }
     .date-num { font-weight: 900; margin-bottom: 8px; }
     .day-line { font-size: 13px; margin-top: 4px; display: flex; justify-content: space-between; gap: 6px; }
+    .day-entry-line { margin-top: 5px; padding: 5px 6px; border-radius: 8px; font-size: 12px; font-weight: 800; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .day-total { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-weight: 900; font-size: 13px; }
 
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
@@ -320,6 +321,14 @@
       return `<span style="display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; ${getEntryTypeBadgeStyle(e)}">${getEntryTypeLabel(e)}</span>`;
     }
 
+    function getEntryRowBgStyle(e) {
+      if (e.type === "income") return "background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;";
+      if (isFixedEntry(e)) return "background:#fef2f2; color:#b91c1c; border:1px solid #fecaca;";
+      if (isSavingEntry(e)) return "background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;";
+      if (isTransferEntry(e)) return "background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;";
+      return "background:#f9fafb; color:#111827; border:1px solid #e5e7eb;";
+    }
+
     function renderSummary() {
       renderSummaryCategoryOptions();
 
@@ -369,7 +378,8 @@
         const income = dayEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
         const expense = dayEntries.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
         const div=document.createElement("div"); div.className="day"; div.onclick=()=>openDayModal(dateStr);
-        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>사용금액</span><span>${expense?money(expense):"-"}</span></div>`;
+        const detailLines = dayEntries.map(e => `<div class="day-entry-line" style="${getEntryRowBgStyle(e)}">${getEntryTypeLabel(e)} - ${escapeHtml(e.category)} - ${money(e.amount)}</div>`).join("");
+        div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>사용금액</span><span>${expense?money(expense):"-"}</span></div>${detailLines}`;
         calendarDays.appendChild(div);
       }
     }
