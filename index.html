@@ -219,8 +219,8 @@
   </div></div>
 
   <script>
-    const SUPABASE_URL = "https://yajvtppzhajpexvpqvnv.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhanZ0cHB6aGFqcGV4dnBxdm52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzA1MTksImV4cCI6MjA5NDQ0NjUxOX0.D4bRjAgYBqsVuOeJYk0v0gaaStr5QRm6TSHa3NHYTao";
+    const SUPABASE_URL = "여기에_SUPABASE_URL_입력";
+    const SUPABASE_ANON_KEY = "여기에_SUPABASE_ANON_KEY_입력";
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentDate = new Date();
@@ -298,6 +298,26 @@
 
     function isUserSpendEntry(e) {
       return e.type === "expense" && !isSpecialBalanceOnlyEntry(e);
+    }
+
+    function getEntryTypeLabel(e) {
+      if (e.type === "income") return "수입";
+      if (isFixedEntry(e)) return "고정비";
+      if (isSavingEntry(e)) return "적금";
+      if (isTransferEntry(e)) return "돈옮김";
+      return "지출";
+    }
+
+    function getEntryTypeBadgeStyle(e) {
+      if (e.type === "income") return "background:#dbeafe; color:#1d4ed8;";
+      if (isFixedEntry(e)) return "background:#fee2e2; color:#b91c1c;";
+      if (isSavingEntry(e)) return "background:#dcfce7; color:#15803d;";
+      if (isTransferEntry(e)) return "background:#ede9fe; color:#6d28d9;";
+      return "background:#f3f4f6; color:#111827;";
+    }
+
+    function entryTypeBadge(e) {
+      return `<span style="display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; ${getEntryTypeBadgeStyle(e)}">${getEntryTypeLabel(e)}</span>`;
     }
 
     function renderSummary() {
@@ -399,7 +419,7 @@
       const spendExpense = list.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       const balanceExpense = list.filter(e=>e.type==="expense").reduce((s,e)=>s+Number(e.amount),0);
       historySummary.innerHTML = `<span>검색결과 ${list.length}건</span><span class="income">수입 ${money(income)}</span><span class="expense">사용금액 ${money(spendExpense)}</span><span class="balance">잔액 ${money(income-balanceExpense)}</span>`;
-      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => `<tr><td>${e.entry_date}</td><td class="${e.type === "income" ? "income" : "expense"}">${e.type === "income" ? "수입" : (isFixedEntry(e) ? "고정비" : (isTransferEntry(e) ? "돈옮김" : "지출"))}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.memo || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
+      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => `<tr><td>${e.entry_date}</td><td>${entryTypeBadge(e)}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.memo || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='editEntry(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
     }
 
     function openCategoryModal() { renderCategoryManager(); categoryModal.classList.add("show"); }
