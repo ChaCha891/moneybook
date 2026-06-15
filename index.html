@@ -194,7 +194,6 @@
     <div class="form-grid">
       <div><label>카테고리</label><select id="fixedItemCategory"></select></div>
       <div><label>금액</label><input type="number" id="fixedItemAmount" placeholder="예: 50000" /></div>
-      <div><label>이체예정일</label><input type="number" id="fixedItemDay" min="1" max="31" placeholder="1~31" /></div>
       <div><label>메모</label><input id="fixedItemMemo" placeholder="예: 통신비, 청약, 보험료" /></div>
     </div>
     <div class="modal-actions"><button class="danger" id="deleteFixedItemBtn" onclick="deleteFixedItem()" style="display:none;">삭제</button><button class="light" onclick="closeModal('fixedItemModal')">닫기</button><button onclick="saveFixedItem()">저장</button></div>
@@ -463,7 +462,6 @@
       fixedItemModalTitle.textContent = item ? "고정비 수정" : "고정비 추가";
       fixedItemId.value = item?.id || "";
       renderFixedCategorySelect(item?.category || "");
-      fixedItemDay.value = item?.transfer_day || "";
       fixedItemAmount.value = item?.amount || "";
       fixedItemMemo.value = item?.memo || "";
       deleteFixedItemBtn.style.display = item ? "inline-block" : "none";
@@ -475,6 +473,7 @@
         fixedItemList.innerHTML = `<p style="color:#6b7280;">등록된 고정비/적금 항목이 없습니다.</p>`;
         return;
       }
+
       const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,"0")}`;
       const totalFixed = fixedItems.reduce((s,i)=>s+Number(i.amount||0),0);
 
@@ -485,15 +484,30 @@
           e.category === item.category &&
           Number(e.amount) === Number(item.amount)
         );
+
+        const safeItem = JSON.stringify(item).replace(/'/g,"&#39;");
+        const transferDay = Number(item.transfer_day || 1);
+
         return `
         <div class="entry-row" style="${completed ? 'background:#f0fdf4;' : ''}">
-          <span class="expense">${item.transfer_day}일</span>
+          <span>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              value="${transferDay}"
+              id="fixedDay_${item.id}"
+              style="width:54px; padding:6px; text-align:center; font-weight:900; color:#dc2626; border:1px solid #fecaca;"
+              ${completed ? "disabled" : ""}
+            />
+            <strong style="color:#dc2626;">일</strong>
+          </span>
           <strong>${escapeHtml(item.category)}</strong>
           <span>${escapeHtml(item.memo || "-")}</span>
           <strong>${money(item.amount)}</strong>
           <div style="display:flex;gap:6px;flex-wrap:nowrap;">
-            <button class="light" onclick='openFixedItemModal(${JSON.stringify(item).replace(/'/g,"&#39;")})'>수정</button>
-            ${completed ? '<button disabled style="background:#16a34a">완료</button>' : `<button onclick='completeFixedTransfer(${JSON.stringify(item).replace(/'/g,"&#39;")})'>이체완료</button>`}
+            <button class="light" onclick='openFixedItemModal(${safeItem})'>수정</button>
+            ${completed ? '<button disabled style="background:#16a34a">완료</button>' : `<button onclick='completeFixedTransfer(${safeItem})'>이체완료</button>`}
           </div>
         </div>`;
       }).join("") + `<div style="margin-top:12px;padding-top:12px;border-top:2px solid #e5e7eb;font-size:18px;font-weight:900;text-align:right;">총 고정비 : ${money(totalFixed)}</div>`;
@@ -501,15 +515,16 @@
 
     async function saveFixedItem() {
       const id = fixedItemId.value;
+      const existingItem = fixedItems.find(item => item.id === id);
       const payload = {
         category: fixedItemCategory.value,
         amount: Number(fixedItemAmount.value),
-        transfer_day: Number(fixedItemDay.value),
+        transfer_day: existingItem?.transfer_day || 1,
         memo: fixedItemMemo.value.trim(),
         last_completed_month: null
       };
-      if (!payload.category || !payload.amount || payload.amount <= 0 || !payload.transfer_day || payload.transfer_day < 1 || payload.transfer_day > 31) {
-        alert("카테고리, 금액, 이체예정일(1~31)을 정확히 입력하세요.");
+      if (!payload.category || !payload.amount || payload.amount <= 0) {
+        alert("카테고리, 금액을 정확히 입력하세요.");
         return;
       }
 
@@ -536,6 +551,7 @@
 
     async function completeFixedTransfer(item) {
       const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,"0")}`;
+
       const alreadyCompleted = entries.some(e =>
         isFixedEntry(e) &&
         String(e.entry_date || "").startsWith(currentMonth) &&
@@ -547,7 +563,14 @@
         return;
       }
 
-      const transferDay = Number(item.transfer_day || 1);
+      const dayInput = document.getElementById(`fixedDay_${item.id}`);
+      const transferDay = Number(dayInput?.value || item.transfer_day || 1);
+
+      if (!transferDay || transferDay < 1 || transferDay > 31) {
+        alert("반영할 날짜를 1~31 사이로 입력하세요.");
+        return;
+      }
+
       const { y, m } = monthRange();
       const lastDay = new Date(y, m + 1, 0).getDate();
       const day = Math.min(transferDay, lastDay);
@@ -576,8 +599,8 @@
       if (error) { alert("이체완료 반영 오류: " + error.message); return; }
 
       await db.from("moneybook_fixed_items")
-      .update({last_completed_month: currentMonth})
-      .eq("id", item.id);
+        .update({ last_completed_month: currentMonth, transfer_day: transferDay })
+        .eq("id", item.id);
 
       alert("이체완료. 내역에 반영되었습니다.");
       await loadFixedItems();
