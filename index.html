@@ -183,7 +183,7 @@
     <input type="hidden" id="entryId" />
     <div class="form-grid">
       <div><label>날짜</label><input type="date" id="entryDate" /></div>
-      <div><label>구분</label><select id="entryType" onchange="renderMajorCategorySelect()"><option value="income">수입</option><option value="expense">지출</option></select></div>
+      <div><label>구분</label><select id="entryType" onchange="handleEntryTypeChange()"><option value="income">수입</option><option value="expense">지출</option><option value="credit_card">신용카드 사용</option></select></div>
       <div><label>대분류</label><select id="entryMajorCategory" onchange="renderSubCategorySelect()"></select></div>
       <div><label>소분류</label><select id="entryCategory"></select></div>
       <div><label>금액</label><input type="number" id="entryAmount" placeholder="예: 50000" /></div>
@@ -209,6 +209,7 @@
         <option value="income">수입</option>
         <option value="expense">지출</option>
         <option value="transfer">이체</option>
+        <option value="credit_card">신용카드 사용</option>
       </select>
     </div>
     <div id="historySummary" class="history-summary"></div>
@@ -238,7 +239,7 @@
 
   <div id="categoryModal" class="modal-backdrop"><div class="modal">
     <h2>카테고리 관리</h2>
-    <div><label>구분</label><select id="categoryType" onchange="renderCategoryManager()"><option value="expense">지출</option><option value="income">수입</option></select></div>
+    <div><label>구분</label><select id="categoryType" onchange="renderCategoryManager()"><option value="expense">지출</option><option value="income">수입</option><option value="credit_card">신용카드</option></select></div>
     <h3 style="margin:18px 0 8px;">대분류 추가</h3>
     <div class="form-grid"><div class="full"><input id="newMajorCategoryName" placeholder="예: 식비, 생활비, 교통비" /></div></div>
     <div class="modal-actions"><button onclick="addMajorCategory()">대분류 추가</button></div>
@@ -303,6 +304,7 @@
     const ACCOUNT_STORE = "moneybook_accounts_v2";
     const CACHE_STORE = "moneybook_offline_cache_v2";
     const ACCOUNT_CONFIG_CATEGORY = "__MONEYBOOK_ACCOUNT_CONFIG__";
+    const CREDIT_CATEGORY_PREFIX = "__CREDIT_CARD__::";
     let accounts = JSON.parse(localStorage.getItem(ACCOUNT_STORE) || "null") || [
       { id: "nh_check", name: "농협 체크카드", openingBalance: 0, active: true },
       { id: "toss_check", name: "토스체크카드", openingBalance: 0, active: true },
@@ -316,25 +318,32 @@
     ];
     const CATEGORY_SEPARATOR = "|||";
 
+    function rawCategoryValue(value) { const raw=String(value||"").trim(); return raw.startsWith(CREDIT_CATEGORY_PREFIX)?raw.slice(CREDIT_CATEGORY_PREFIX.length):raw; }
+    function logicalCategoryType(row) { return row.type==="expense"&&String(row.name||"").startsWith(CREDIT_CATEGORY_PREFIX)?"credit_card":row.type; }
+    function dbCategoryType(type) { return type==="credit_card"?"expense":type; }
+    function categoryStorageName(type,value) { const raw=rawCategoryValue(value); return type==="credit_card"?`${CREDIT_CATEGORY_PREFIX}${raw}`:raw; }
     function splitCategory(value) {
-      const raw = String(value || "").trim();
+      const raw = rawCategoryValue(value);
       const index = raw.indexOf(CATEGORY_SEPARATOR);
       if (index < 0) return { major: raw, sub: "" };
       return { major: raw.slice(0, index).trim(), sub: raw.slice(index + CATEGORY_SEPARATOR.length).trim() };
     }
     function categoryMajor(value) { return splitCategory(value).major; }
     function categorySub(value) { return splitCategory(value).sub; }
-    function makeSubCategory(major, sub) { return `${String(major).trim()}${CATEGORY_SEPARATOR}${String(sub).trim()}`; }
+    function makeSubCategory(type, major, sub) { return categoryStorageName(type,`${String(major).trim()}${CATEGORY_SEPARATOR}${String(sub).trim()}`); }
+    function majorCategoryValue(type,major) { return categoryStorageName(type,major); }
     function categoryDisplay(value) { const p=splitCategory(value); return p.sub ? `${p.major} > ${p.sub}` : p.major; }
-    function majorCategoryNames(type) { return [...new Set(categories.filter(c=>c.type===type).map(c=>categoryMajor(c.name)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ko")); }
-    function subCategoryRows(type, major) { return categories.filter(c=>c.type===type && categoryMajor(c.name)===major && categorySub(c.name)); }
+    function majorCategoryNames(type) { return [...new Set(categories.filter(c=>logicalCategoryType(c)===type).map(c=>categoryMajor(c.name)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ko")); }
+    function subCategoryRows(type, major) { return categories.filter(c=>logicalCategoryType(c)===type && categoryMajor(c.name)===major && categorySub(c.name)); }
 
     function money(n) { return Number(n || 0).toLocaleString("ko-KR") + "원"; }
     function ymd(date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
     function monthRange() { const y=currentDate.getFullYear(), m=currentDate.getMonth(); return { start: ymd(new Date(y,m,1)), end: ymd(new Date(y,m+1,0)), y, m }; }
 
     function uid() { return crypto.randomUUID?.() || `id_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
-    function saveAccounts() { localStorage.setItem(ACCOUNT_STORE, JSON.stringify(accounts)); persistAccounts(); }
+    function ensureCreditAccount() { let account=accounts.find(a=>a.fixedCreditCard)||accounts.find(a=>String(a.name||"").includes("신용카드")); if(!account){account={id:"credit_card_fixed",name:"신용카드",openingBalance:0,active:true,fixedCreditCard:true};accounts.push(account);} account.name="신용카드";account.openingBalance=0;account.active=true;account.fixedCreditCard=true;localStorage.setItem(ACCOUNT_STORE,JSON.stringify(accounts));return account; }
+    function creditAccountId() { return ensureCreditAccount().id; }
+    function saveAccounts() { ensureCreditAccount(); localStorage.setItem(ACCOUNT_STORE, JSON.stringify(accounts)); persistAccounts(); }
     function activeAccounts() { return accounts.filter(a => a.active !== false); }
     function accountName(id) { return accounts.find(a => a.id === id)?.name || "계좌 미지정"; }
     function cacheData(patch) { const old = JSON.parse(localStorage.getItem(CACHE_STORE) || "{}"); localStorage.setItem(CACHE_STORE, JSON.stringify({ ...old, ...patch })); }
@@ -346,7 +355,7 @@
     function entryMeta(e) { return unpackMemo(e?.memo).meta; }
     function visibleMemo(e) { return unpackMemo(e?.memo).text; }
     function entryAccountId(e) { return entryMeta(e).accountId || ""; }
-    function accountOptions(selected = "", allowBlank = true) { return (allowBlank ? `<option value="">계좌 미지정</option>` : "") + activeAccounts().map(a => `<option value="${a.id}" ${a.id === selected ? "selected" : ""}>${escapeHtml(a.name)}</option>`).join(""); }
+    function accountOptions(selected = "", allowBlank = true, includeCredit = true) { return (allowBlank ? `<option value="">계좌 미지정</option>` : "") + activeAccounts().filter(a=>includeCredit||!a.fixedCreditCard).map(a => `<option value="${a.id}" ${a.id === selected ? "selected" : ""}>${escapeHtml(a.name)}</option>`).join(""); }
 
     function createPigIcon(size = 512) {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><rect width="512" height="512" rx="108" fill="#fce7f3"/><ellipse cx="260" cy="276" rx="160" ry="115" fill="#f9a8d4"/><circle cx="382" cy="250" r="46" fill="#f9a8d4"/><circle cx="404" cy="248" r="23" fill="#fce7f3"/><circle cx="397" cy="248" r="5" fill="#111827"/><circle cx="413" cy="248" r="5" fill="#111827"/><circle cx="210" cy="230" r="13" fill="#111827"/><path d="M158 184 L125 132 Q119 121 132 120 L196 137" fill="#f9a8d4" stroke="#111827" stroke-width="10" stroke-linejoin="round"/><path d="M275 166 L306 111 Q314 99 324 111 L352 171" fill="#f9a8d4" stroke="#111827" stroke-width="10" stroke-linejoin="round"/><rect x="198" y="163" width="126" height="20" rx="10" fill="#111827" opacity=".85"/><path d="M151 336 Q207 378 287 361" fill="none" stroke="#111827" stroke-width="11" stroke-linecap="round"/><rect x="160" y="371" width="45" height="55" rx="18" fill="#111827" opacity=".85"/><rect x="302" y="365" width="45" height="61" rx="18" fill="#111827" opacity=".85"/><text x="256" y="92" text-anchor="middle" font-size="52" font-family="Arial" font-weight="900" fill="#111827">₩</text></svg>`;
@@ -364,12 +373,12 @@
     async function retryConnection() { if (!db) { showOffline(new Error("연결 모듈을 불러오지 못했습니다")); return; } cloudOnline = true; await loadCategories(); await loadAccounts(); await loadFixedItems(); await loadData(); }
 
     async function loadAccounts() {
-      if (!cloudOnline || !db) { renderAccounts(); return; }
+      if (!cloudOnline || !db) { ensureCreditAccount(); renderAccounts(); return; }
       try {
         const { data, error } = await db.from("moneybook_entries").select("*").eq("category", ACCOUNT_CONFIG_CATEGORY).limit(1);
         if (error) throw error;
-        if (data?.length) { accountConfigId = data[0].id; const saved=entryMeta(data[0]).accounts; if(Array.isArray(saved)&&saved.length) accounts=saved; localStorage.setItem(ACCOUNT_STORE,JSON.stringify(accounts)); }
-        else await persistAccounts();
+        if (data?.length) { accountConfigId = data[0].id; const saved=entryMeta(data[0]).accounts; if(Array.isArray(saved)&&saved.length) accounts=saved; }
+        ensureCreditAccount(); await persistAccounts();
       } catch(error) { showOffline(error); }
       renderAccounts();
     }
@@ -421,6 +430,10 @@
       return e.type === "expense" && entryCategoryName(e) === "돈옮김" && (entryMeta(e).kind === "transfer" || !entryMeta(e).kind);
     }
 
+    function isCreditCardEntry(e) {
+      return e.type === "expense" && entryMeta(e).kind === "credit_card";
+    }
+
     function isSavingEntry(e) {
       return e.type === "expense" && entryCategoryName(e) === "적금";
     }
@@ -442,6 +455,7 @@
 
     function getEntryTypeLabel(e) {
       if (e.type === "income") return "수입";
+      if (isCreditCardEntry(e)) return "신용카드 사용";
       if (isFixedEntry(e)) return "고정비";
       if (isSavingEntry(e)) return "적금";
       if (isTransferEntry(e)) return "돈옮김";
@@ -450,6 +464,7 @@
 
     function getEntryTypeBadgeStyle(e) {
       if (e.type === "income") return "background:#dbeafe; color:#1d4ed8;";
+      if (isCreditCardEntry(e)) return "background:#ffedd5; color:#c2410c;";
       if (isFixedEntry(e)) return "background:#dbeafe; color:#1d4ed8;";
       if (isSavingEntry(e)) return "background:#dcfce7; color:#15803d;";
       if (isTransferEntry(e)) return "background:#ede9fe; color:#6d28d9;";
@@ -497,7 +512,7 @@
       const prevIncome = incomeSummaryCategory.value || "all";
       const prevExpense = expenseSummaryCategory.value || "all";
       const incomeCategories = majorCategoryNames("income");
-      const expenseCategories = majorCategoryNames("expense");
+      const expenseCategories = [...new Set([...majorCategoryNames("expense"), ...majorCategoryNames("credit_card")])].sort((a,b)=>a.localeCompare(b,"ko"));
 
       incomeSummaryCategory.innerHTML = `<option value="all">전체 수입</option>` + incomeCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
       expenseSummaryCategory.innerHTML = `<option value="all">전체 사용금액</option>` + expenseCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
@@ -527,8 +542,15 @@
 
     function openEntryModal(date = null, entry = null) {
       entryModalTitle.textContent = entry ? "내역 수정" : "내역 입력";
-      entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = entry?.type || "expense"; entryAmount.value = entry?.amount || ""; entryFixed.value = entry?.is_fixed === true ? "true" : "false"; entryMemo.value = entry ? visibleMemo(entry) : ""; entryAccount.innerHTML = accountOptions(entry ? entryAccountId(entry) : "", true);
-      renderMajorCategorySelect(entry?.category || ""); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
+      entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = entry&&isCreditCardEntry(entry)?"credit_card":entry?.type||"expense"; entryAmount.value = entry?.amount || ""; entryFixed.value = entry?.is_fixed === true ? "true" : "false"; entryMemo.value = entry ? visibleMemo(entry) : "";
+      handleEntryTypeChange(entry?.category||"",entry?entryAccountId(entry):""); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
+    }
+
+    function handleEntryTypeChange(selectedCategory="",selectedAccount="") {
+      const credit=entryType.value==="credit_card";
+      if(credit){const id=creditAccountId();entryAccount.innerHTML=`<option value="${id}">신용카드</option>`;entryAccount.value=id;entryAccount.disabled=true;entryFixed.value="false";entryFixed.disabled=true;}
+      else{entryAccount.disabled=false;entryFixed.disabled=false;entryAccount.innerHTML=accountOptions(selectedAccount||entryAccount.value,true,false);}
+      renderMajorCategorySelect(selectedCategory);
     }
 
     function renderMajorCategorySelect(selected = "") {
@@ -543,15 +565,16 @@
     function renderSubCategorySelect(selected = "") {
       const type = entryType?.value || "expense";
       const major = entryMajorCategory.value;
-      const selectedValue = selected || entryCategory?.value || major;
+      const majorValue=majorCategoryValue(type,major);
+      const selectedValue = selected || entryCategory?.value || majorValue;
       const subs = subCategoryRows(type, major);
-      entryCategory.innerHTML = `<option value="${escapeHtml(major)}">대분류만 사용</option>` + subs.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(categorySub(c.name))}</option>`).join("");
-      if ([major, ...subs.map(c=>c.name)].includes(selectedValue)) entryCategory.value = selectedValue;
+      entryCategory.innerHTML = `<option value="${escapeHtml(majorValue)}">대분류만 사용</option>` + subs.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(categorySub(c.name))}</option>`).join("");
+      if ([majorValue, ...subs.map(c=>c.name)].includes(selectedValue)) entryCategory.value = selectedValue;
     }
 
     async function saveEntry() {
       const id = entryId.value;
-      const payload = { entry_date: entryDate.value, type: entryType.value, category: entryCategory.value, amount: Number(entryAmount.value), is_fixed: entryType.value === "expense" && entryFixed.value === "true", memo: packMemo(entryMemo.value, { kind: "entry", accountId: entryAccount.value }) };
+      const selectedType=entryType.value,credit=selectedType==="credit_card",payload = { entry_date: entryDate.value, type: credit?"expense":selectedType, category: entryCategory.value, amount: Number(entryAmount.value), is_fixed: !credit&&selectedType === "expense" && entryFixed.value === "true", memo: packMemo(entryMemo.value, { kind: credit?"credit_card":"entry", accountId: credit?creditAccountId():entryAccount.value }) };
       if (!payload.entry_date || !payload.category || !payload.amount || payload.amount <= 0) { alert("날짜, 카테고리, 금액을 정확히 입력하세요."); return; }
       try {
       let error; if (id) ({ error } = await db.from("moneybook_entries").update(payload).eq("id", id)); else ({ error } = await db.from("moneybook_entries").insert(payload));
@@ -643,16 +666,16 @@
     }
 
     function openAccountManageModal() { renderAccountManager(); accountManageModal.classList.add("show"); }
-    function renderAccountManager() { accountManageList.innerHTML = activeAccounts().map(a => `<div class="account-manage-row"><input value="${escapeHtml(a.name)}" onchange="updateAccount('${a.id}','name',this.value)"><input type="number" value="${Number(a.openingBalance || 0)}" onchange="updateAccount('${a.id}','openingBalance',this.value)"><button class="danger" onclick="removeAccount('${a.id}')">제거</button></div>`).join(""); }
+    function renderAccountManager() { accountManageList.innerHTML = activeAccounts().map(a => a.fixedCreditCard?`<div class="account-manage-row"><input value="신용카드" disabled><input type="number" value="0" disabled><button disabled>고정</button></div>`:`<div class="account-manage-row"><input value="${escapeHtml(a.name)}" onchange="updateAccount('${a.id}','name',this.value)"><input type="number" value="${Number(a.openingBalance || 0)}" onchange="updateAccount('${a.id}','openingBalance',this.value)"><button class="danger" onclick="removeAccount('${a.id}')">제거</button></div>`).join(""); }
     function addAccount() { const name=newAccountName.value.trim(); if(!name){alert("계좌·카드 이름을 입력하세요.");return;} if(activeAccounts().some(a=>a.name===name)){alert("같은 이름이 이미 있습니다.");return;} accounts.push({id:uid(),name,openingBalance:Number(newAccountBalance.value||0),active:true}); saveAccounts(); newAccountName.value="";newAccountBalance.value=0;renderAccountManager();renderAccounts(); }
-    function updateAccount(id,key,value) { const a=accounts.find(x=>x.id===id); if(!a)return; a[key]=key==="openingBalance"?Number(value||0):String(value).trim(); saveAccounts(); renderAccounts(); }
-    function removeAccount(id) { const a=accounts.find(x=>x.id===id); if(!a||!confirm(`'${a.name}'을 목록에서 제거할까요? 기존 내역은 유지됩니다.`))return; a.active=false; saveAccounts(); renderAccountManager(); renderAccounts(); }
+    function updateAccount(id,key,value) { const a=accounts.find(x=>x.id===id); if(!a||a.fixedCreditCard)return; a[key]=key==="openingBalance"?Number(value||0):String(value).trim(); saveAccounts(); renderAccounts(); }
+    function removeAccount(id) { const a=accounts.find(x=>x.id===id); if(!a)return;if(a.fixedCreditCard){alert("신용카드는 고정 계좌라 제거할 수 없습니다.");return;}if(!confirm(`'${a.name}'을 목록에서 제거할까요? 기존 내역은 유지됩니다.`))return; a.active=false; saveAccounts(); renderAccountManager(); renderAccounts(); }
 
     function openHistoryModal() { historySearch.value = ""; historyTypeFilter.value = "all"; renderHistoryList(); historyModal.classList.add("show"); }
     function renderHistoryList() {
       const keyword = historySearch.value.trim().toLowerCase(); const type = historyTypeFilter.value;
       let list = [...entries].sort((a,b) => (a.entry_date < b.entry_date ? 1 : -1));
-      if (type !== "all") list = list.filter(e => type === "transfer" ? isTransferEntry(e) : e.type === type && !isTransferEntry(e));
+      if (type !== "all") list = list.filter(e => type === "transfer" ? isTransferEntry(e) : type === "credit_card" ? isCreditCardEntry(e) : e.type === type && !isTransferEntry(e) && !(type==="expense"&&isCreditCardEntry(e)));
       if (keyword) list = list.filter(e => { const m=entryMeta(e), accountText=isTransferEntry(e)?`${accountName(m.fromAccountId)} ${accountName(m.toAccountId)}`:accountName(m.accountId); return `${e.category} ${visibleMemo(e)} ${accountText}`.toLowerCase().includes(keyword); });
       const income = list.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
       const spendExpense = list.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
@@ -671,14 +694,15 @@
       }).join(""):`<p style="color:#6b7280;text-align:center;">등록된 대분류가 없습니다.</p>`;
     }
     async function insertCategoryRecord(type,name) {
-      if(categories.some(c=>c.type===type&&c.name===name)){alert("이미 존재하는 카테고리입니다.");return false;}
-      if(cloudOnline&&db){try{const{error}=await db.from("moneybook_categories").insert({type,name});if(error)throw error;await loadCategories();return true;}catch(error){showOffline(error);}}
-      categories.push({id:uid(),type,name});cacheData({categories});refreshCategoryViews();return true;
+      const storedName=categoryStorageName(type,name),storedType=dbCategoryType(type);
+      if(categories.some(c=>logicalCategoryType(c)===type&&c.name===storedName)){alert("이미 존재하는 카테고리입니다.");return false;}
+      if(cloudOnline&&db){try{const{error}=await db.from("moneybook_categories").insert({type:storedType,name:storedName});if(error)throw error;await loadCategories();return true;}catch(error){showOffline(error);}}
+      categories.push({id:uid(),type:storedType,name:storedName});cacheData({categories});refreshCategoryViews();return true;
     }
     async function addMajorCategory(){const type=categoryType.value,name=newMajorCategoryName.value.trim();if(!name){alert("대분류명을 입력하세요.");return;}if(name.includes(CATEGORY_SEPARATOR)){alert("카테고리명에는 ||| 문자를 사용할 수 없습니다.");return;}if(await insertCategoryRecord(type,name))newMajorCategoryName.value="";}
-    async function addSubCategory(){const type=categoryType.value,major=subCategoryMajor.value,sub=newSubCategoryName.value.trim();if(!major){alert("먼저 대분류를 추가하세요.");return;}if(!sub){alert("소분류명을 입력하세요.");return;}if(sub.includes(CATEGORY_SEPARATOR)){alert("카테고리명에는 ||| 문자를 사용할 수 없습니다.");return;}if(await insertCategoryRecord(type,makeSubCategory(major,sub)))newSubCategoryName.value="";}
+    async function addSubCategory(){const type=categoryType.value,major=subCategoryMajor.value,sub=newSubCategoryName.value.trim();if(!major){alert("먼저 대분류를 추가하세요.");return;}if(!sub){alert("소분류명을 입력하세요.");return;}if(sub.includes(CATEGORY_SEPARATOR)){alert("카테고리명에는 ||| 문자를 사용할 수 없습니다.");return;}if(await insertCategoryRecord(type,makeSubCategory(type,major,sub)))newSubCategoryName.value="";}
     async function removeCategory(id){if(!confirm("이 소분류를 제거할까요? 기존 내역은 그대로 유지됩니다."))return;if(cloudOnline&&db){try{const{error}=await db.from("moneybook_categories").delete().eq("id",id);if(error)throw error;await loadCategories();return;}catch(error){showOffline(error);}}categories=categories.filter(c=>String(c.id)!==String(id));cacheData({categories});refreshCategoryViews();}
-    async function removeMajorCategory(type,encodedMajor){const major=decodeURIComponent(encodedMajor),targets=categories.filter(c=>c.type===type&&categoryMajor(c.name)===major);if(!confirm(`'${major}' 대분류와 그 아래 소분류 ${targets.filter(c=>categorySub(c.name)).length}개를 제거할까요? 기존 내역은 유지됩니다.`))return;const ids=targets.map(c=>c.id).filter(Boolean);if(cloudOnline&&db&&ids.length){try{const{error}=await db.from("moneybook_categories").delete().in("id",ids);if(error)throw error;await loadCategories();return;}catch(error){showOffline(error);}}categories=categories.filter(c=>!targets.includes(c));cacheData({categories});refreshCategoryViews();}
+    async function removeMajorCategory(type,encodedMajor){const major=decodeURIComponent(encodedMajor),targets=categories.filter(c=>logicalCategoryType(c)===type&&categoryMajor(c.name)===major);if(!confirm(`'${major}' 대분류와 그 아래 소분류 ${targets.filter(c=>categorySub(c.name)).length}개를 제거할까요? 기존 내역은 유지됩니다.`))return;const ids=targets.map(c=>c.id).filter(Boolean);if(cloudOnline&&db&&ids.length){try{const{error}=await db.from("moneybook_categories").delete().in("id",ids);if(error)throw error;await loadCategories();return;}catch(error){showOffline(error);}}categories=categories.filter(c=>!targets.includes(c));cacheData({categories});refreshCategoryViews();}
     function refreshCategoryViews(){renderCategoryManager();renderMajorCategorySelect();renderSummary();if(typeof fixedItemCategory!=="undefined")renderFixedCategorySelect();}
 
     async function loadFixedItems() {
@@ -709,7 +733,7 @@
       fixedItemModalTitle.textContent = item ? "고정비 수정" : "고정비 추가";
       fixedItemId.value = item?.id || "";
       renderFixedCategorySelect(item?.category || "");
-      fixedItemAccount.innerHTML = accountOptions(item ? entryMeta(item).accountId : "", false);
+      fixedItemAccount.innerHTML = accountOptions(item ? entryMeta(item).accountId : "", false, false);
       fixedItemAmount.value = item?.amount || "";
       fixedItemMemo.value = item ? visibleMemo(item) : "";
       deleteFixedItemBtn.style.display = item ? "inline-block" : "none";
