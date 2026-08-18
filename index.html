@@ -116,6 +116,8 @@
     .account-box strong { font-size:20px; }
     .transfer-list { margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
     .transfer-row { display:grid; grid-template-columns:100px 1fr 120px 70px; gap:8px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); }
+    .activity-list-box { max-height:360px; overflow-y:auto; margin-top:10px; border:1px solid var(--line); border-radius:14px; padding:0 10px; background:#fff; }
+    .activity-toggle { display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; background:#f9fafb; color:var(--text); border:1px solid var(--line); }
     .account-manage-row { display:grid; grid-template-columns:1fr 140px 80px; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
 
     @media (max-width: 768px) {
@@ -298,6 +300,7 @@
     let chartInstance = null;
     let fixedItems = [];
     let selectedAccountId = "all";
+    let accountActivityExpanded = false;
     let cloudOnline = true;
     let accountConfigId = null;
 
@@ -441,7 +444,7 @@
     function isFixedEntry(e) {
       const fixedValue = e.is_fixed;
       const fixedChecked = fixedValue === true || fixedValue === "true" || fixedValue === 1 || fixedValue === "1";
-      const fixedCategory = entryCategoryName(e) === "고정비";
+      const fixedCategory = categoryMajor(entryCategoryName(e)) === "고정비";
       return e.type === "expense" && (fixedChecked || fixedCategory);
     }
 
@@ -530,8 +533,8 @@
         const dateStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
         const dayEntries = entries.filter(e => e.entry_date === dateStr);
         const income = dayEntries.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
-        const expense = dayEntries.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
-        const fixed = dayEntries.filter(e=>isFixedEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
+        const expense = dayEntries.filter(e=>isUserSpendEntry(e)&&!isCreditCardEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
+        const fixed = dayEntries.filter(e=>isFixedEntry(e)&&!isCreditCardEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
         const div=document.createElement("div"); div.className="day"; div.onclick=()=>openDayModal(dateStr);
         div.innerHTML = `<div class="date-num">${d}</div><div class="day-line income"><span>수입</span><span>${income?money(income):"-"}</span></div><div class="day-line expense"><span>사용금액</span><span>${expense?money(expense):"-"}</span></div><div class="day-line" style="color:#2563eb;font-weight:900;"><span>고정비</span><span>${fixed?money(fixed):"-"}</span></div>`;
         calendarDays.appendChild(div);
@@ -625,16 +628,24 @@
       renderAccountTransfers();
     }
 
-    function selectAccount(id) { selectedAccountId = id; renderAccounts(); }
+    function selectAccount(id) { selectedAccountId = id; accountActivityExpanded = false; renderAccounts(); }
+    function toggleAccountActivity() { accountActivityExpanded = !accountActivityExpanded; renderAccountTransfers(); }
 
     function renderAccountTransfers() {
-      let list = allEntries.filter(isTransferEntry).sort((a,b) => a.entry_date < b.entry_date ? 1 : -1);
-      if (selectedAccountId !== "all") list = list.filter(e => { const m=entryMeta(e); return m.fromAccountId === selectedAccountId || m.toAccountId === selectedAccountId; });
-      const title = selectedAccountId === "all" ? "전체 이체 내역" : `${accountName(selectedAccountId)} 이체 내역`;
-      accountTransferList.innerHTML = `<h3 style="margin:0 0 8px;">${escapeHtml(title)}</h3>` + (list.length ? list.map(e => {
-        const m = entryMeta(e);
-        return `<div class="transfer-row"><span>${e.entry_date}</span><span><strong>${escapeHtml(accountName(m.fromAccountId))}</strong> → <strong>${escapeHtml(accountName(m.toAccountId))}</strong><br><small>${escapeHtml(visibleMemo(e) || "-")}</small></span><strong style="color:#7c3aed;">${money(e.amount)}</strong><button class="light" onclick='editTransfer(${JSON.stringify(e).replace(/'/g,"&#39;")})'>수정</button></div>`;
-      }).join("") : `<p style="color:#6b7280;text-align:center;">저장된 이체 내역이 없습니다.</p>`);
+      let list = [...allEntries].sort((a,b) => a.entry_date === b.entry_date ? String(b.created_at||"").localeCompare(String(a.created_at||"")) : b.entry_date.localeCompare(a.entry_date));
+      if (selectedAccountId !== "all") list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? m.fromAccountId === selectedAccountId || m.toAccountId === selectedAccountId : m.accountId === selectedAccountId; });
+      const title = selectedAccountId === "all" ? "전체 계좌·카드 내역" : `${accountName(selectedAccountId)} 전체 내역`;
+      const toggle=`<button class="activity-toggle" onclick="toggleAccountActivity()"><span>${escapeHtml(title)} <small style="color:#6b7280;">(${list.length}건)</small></span><strong>${accountActivityExpanded?"▲ 접기":"▼ 내역 보기"}</strong></button>`;
+      if(!accountActivityExpanded){accountTransferList.innerHTML=toggle;return;}
+      const rows=list.length?list.map(e=>{
+        const m=entryMeta(e),transfer=isTransferEntry(e);
+        const detail=transfer?`<strong>${escapeHtml(accountName(m.fromAccountId))}</strong> → <strong>${escapeHtml(accountName(m.toAccountId))}</strong>`:`${entryTypeBadge(e)} <strong>${escapeHtml(categoryDisplay(e.category))}</strong><br><small>${escapeHtml(accountName(m.accountId))}</small>`;
+        let amountText=money(e.amount),amountStyle="color:#7c3aed;";
+        if(!transfer){const income=e.type==="income";amountText=`${income?"+":"-"}${money(e.amount)}`;amountStyle=income?"color:#2563eb;":"color:#dc2626;";}
+        else if(selectedAccountId!=="all"){const incoming=m.toAccountId===selectedAccountId;amountText=`${incoming?"+":"-"}${money(e.amount)}`;amountStyle=incoming?"color:#2563eb;":"color:#dc2626;";}
+        return `<div class="transfer-row"><span>${e.entry_date}</span><span>${detail}<br><small>${escapeHtml(visibleMemo(e)||"-")}</small></span><strong style="${amountStyle}">${amountText}</strong><button class="light" onclick='${transfer?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g,"&#39;")})'>수정</button></div>`;
+      }).join(""):`<p style="color:#6b7280;text-align:center;">저장된 내역이 없습니다.</p>`;
+      accountTransferList.innerHTML=toggle+`<div class="activity-list-box">${rows}</div>`;
     }
 
     function openTransferModal(date = null, entry = null) {
