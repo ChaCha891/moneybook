@@ -98,6 +98,12 @@
 
     .category-row { display: grid; grid-template-columns: 1fr 80px; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
     .chart-wrap { max-width: 520px; margin: 0 auto; }
+    .category-group { margin-top:14px; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    .category-group-head { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px; background:#f9fafb; }
+    .subcategory-row { display:grid; grid-template-columns:1fr 110px 70px; gap:8px; align-items:center; padding:9px 12px; border-top:1px solid var(--line); }
+    .breakdown-group { margin-top:12px; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    .breakdown-major { display:flex; justify-content:space-between; gap:10px; padding:12px; background:#f9fafb; font-weight:900; }
+    .breakdown-sub { display:flex; justify-content:space-between; gap:10px; padding:9px 16px; border-top:1px solid var(--line); }
 
     .connection-status { display:none; margin-bottom:12px; padding:11px 13px; border-radius:12px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-weight:800; }
     .connection-status.show { display:flex; justify-content:space-between; align-items:center; gap:10px; }
@@ -177,8 +183,9 @@
     <input type="hidden" id="entryId" />
     <div class="form-grid">
       <div><label>날짜</label><input type="date" id="entryDate" /></div>
-      <div><label>구분</label><select id="entryType" onchange="renderCategorySelect()"><option value="income">수입</option><option value="expense">지출</option></select></div>
-      <div><label>카테고리</label><select id="entryCategory"></select></div>
+      <div><label>구분</label><select id="entryType" onchange="renderMajorCategorySelect()"><option value="income">수입</option><option value="expense">지출</option></select></div>
+      <div><label>대분류</label><select id="entryMajorCategory" onchange="renderSubCategorySelect()"></select></div>
+      <div><label>소분류</label><select id="entryCategory"></select></div>
       <div><label>금액</label><input type="number" id="entryAmount" placeholder="예: 50000" /></div>
       <div><label>사용 계좌·카드</label><select id="entryAccount"></select></div>
       <div><label>고정비 여부</label><select id="entryFixed"><option value="false">일반 사용금액</option><option value="true">고정비</option></select></div>
@@ -231,19 +238,25 @@
 
   <div id="categoryModal" class="modal-backdrop"><div class="modal">
     <h2>카테고리 관리</h2>
+    <div><label>구분</label><select id="categoryType" onchange="renderCategoryManager()"><option value="expense">지출</option><option value="income">수입</option></select></div>
+    <h3 style="margin:18px 0 8px;">대분류 추가</h3>
+    <div class="form-grid"><div class="full"><input id="newMajorCategoryName" placeholder="예: 식비, 생활비, 교통비" /></div></div>
+    <div class="modal-actions"><button onclick="addMajorCategory()">대분류 추가</button></div>
+    <h3 style="margin:18px 0 8px;">소분류 추가</h3>
     <div class="form-grid">
-      <div><label>구분</label><select id="categoryType"><option value="expense">지출</option><option value="income">수입</option></select></div>
-      <div><label>카테고리명</label><input id="newCategoryName" placeholder="예: 식비" /></div>
+      <div><label>소속 대분류</label><select id="subCategoryMajor"></select></div>
+      <div><label>소분류명</label><input id="newSubCategoryName" placeholder="예: 외식, 장보기, 배달" /></div>
     </div>
-    <div class="modal-actions"><button onclick="addCategory()">추가</button></div>
+    <div class="modal-actions"><button onclick="addSubCategory()">소분류 추가</button></div>
     <div id="categoryList" style="margin-top:12px;"></div>
     <div class="modal-actions"><button class="light" onclick="closeModal('categoryModal')">닫기</button></div>
   </div></div>
 
   <div id="chartModal" class="modal-backdrop"><div class="modal">
-    <h2>카테고리별 지출 원형차트</h2>
+    <h2>대분류·소분류별 지출 분석</h2>
     <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
     <div id="chartEmpty" style="display:none; text-align:center; color:#6b7280; margin-top:20px;">이번 달 지출 내역이 없습니다.</div>
+    <div id="categoryBreakdown"></div>
     <div class="modal-actions"><button class="light" onclick="closeModal('chartModal')">닫기</button></div>
   </div></div>
 
@@ -301,6 +314,20 @@
       { type: "expense", name: "식비" }, { type: "expense", name: "교통" },
       { type: "expense", name: "생활용품" }, { type: "expense", name: "통신" }, { type: "expense", name: "기타" }
     ];
+    const CATEGORY_SEPARATOR = "|||";
+
+    function splitCategory(value) {
+      const raw = String(value || "").trim();
+      const index = raw.indexOf(CATEGORY_SEPARATOR);
+      if (index < 0) return { major: raw, sub: "" };
+      return { major: raw.slice(0, index).trim(), sub: raw.slice(index + CATEGORY_SEPARATOR.length).trim() };
+    }
+    function categoryMajor(value) { return splitCategory(value).major; }
+    function categorySub(value) { return splitCategory(value).sub; }
+    function makeSubCategory(major, sub) { return `${String(major).trim()}${CATEGORY_SEPARATOR}${String(sub).trim()}`; }
+    function categoryDisplay(value) { const p=splitCategory(value); return p.sub ? `${p.major} > ${p.sub}` : p.major; }
+    function majorCategoryNames(type) { return [...new Set(categories.filter(c=>c.type===type).map(c=>categoryMajor(c.name)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ko")); }
+    function subCategoryRows(type, major) { return categories.filter(c=>c.type===type && categoryMajor(c.name)===major && categorySub(c.name)); }
 
     function money(n) { return Number(n || 0).toLocaleString("ko-KR") + "원"; }
     function ymd(date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
@@ -357,7 +384,7 @@
     }
 
     async function loadCategories() {
-      if (!cloudOnline || !db) { categories = (cachedData().categories || defaultCategories).map((c,i)=>({...c,id:c.id||`local_${c.type}_${i}`})); renderCategorySelect(); renderCategoryManager(); return; }
+      if (!cloudOnline || !db) { categories = (cachedData().categories || defaultCategories).map((c,i)=>({...c,id:c.id||`local_${c.type}_${i}`})); renderMajorCategorySelect(); renderCategoryManager(); return; }
       try {
       const { data, error } = await db.from("moneybook_categories").select("*").order("type", { ascending: true }).order("name", { ascending: true });
       if (error) throw error;
@@ -367,9 +394,9 @@
         if (insertError) throw insertError;
         await loadCategories(); return;
       }
-      renderCategorySelect(); renderCategoryManager();
+      renderMajorCategorySelect(); renderCategoryManager();
       } catch (error) {
-        showOffline(error); categories = (cachedData().categories || defaultCategories).map((c,i)=>({...c,id:c.id||`local_${c.type}_${i}`})); renderCategorySelect(); renderCategoryManager();
+        showOffline(error); categories = (cachedData().categories || defaultCategories).map((c,i)=>({...c,id:c.id||`local_${c.type}_${i}`})); renderMajorCategorySelect(); renderCategoryManager();
       }
     }
 
@@ -447,11 +474,11 @@
       const incomeCategory = incomeSummaryCategory.value;
       const expenseCategory = expenseSummaryCategory.value;
 
-      const incomeList = entries.filter(e => e.type === "income" && (incomeCategory === "all" || e.category === incomeCategory));
+      const incomeList = entries.filter(e => e.type === "income" && (incomeCategory === "all" || categoryMajor(e.category) === incomeCategory));
       const expenseList = entries.filter(e => {
         if (e.type !== "expense") return false;
         if (expenseCategory === "all") return isUserSpendEntry(e);
-        return e.category === expenseCategory;
+        return categoryMajor(e.category) === expenseCategory;
       });
 
       const totalIncomeAll = entries.filter(e => e.type === "income").reduce((s,e)=>s+Number(e.amount),0);
@@ -469,8 +496,8 @@
     function renderSummaryCategoryOptions() {
       const prevIncome = incomeSummaryCategory.value || "all";
       const prevExpense = expenseSummaryCategory.value || "all";
-      const incomeCategories = categories.filter(c => c.type === "income").map(c => c.name);
-      const expenseCategories = categories.filter(c => c.type === "expense").map(c => c.name);
+      const incomeCategories = majorCategoryNames("income");
+      const expenseCategories = majorCategoryNames("expense");
 
       incomeSummaryCategory.innerHTML = `<option value="all">전체 수입</option>` + incomeCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
       expenseSummaryCategory.innerHTML = `<option value="all">전체 사용금액</option>` + expenseCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
@@ -501,12 +528,25 @@
     function openEntryModal(date = null, entry = null) {
       entryModalTitle.textContent = entry ? "내역 수정" : "내역 입력";
       entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = entry?.type || "expense"; entryAmount.value = entry?.amount || ""; entryFixed.value = entry?.is_fixed === true ? "true" : "false"; entryMemo.value = entry ? visibleMemo(entry) : ""; entryAccount.innerHTML = accountOptions(entry ? entryAccountId(entry) : "", true);
-      renderCategorySelect(entry?.category || ""); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
+      renderMajorCategorySelect(entry?.category || ""); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
     }
 
-    function renderCategorySelect(selected = "") {
-      const type = entryType?.value || "expense"; const filtered = categories.filter(c => c.type === type);
-      entryCategory.innerHTML = filtered.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join(""); if (selected) entryCategory.value = selected;
+    function renderMajorCategorySelect(selected = "") {
+      const type = entryType?.value || "expense";
+      const selectedParts = splitCategory(selected || entryCategory?.value || "");
+      const majors = majorCategoryNames(type);
+      entryMajorCategory.innerHTML = majors.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      if (selectedParts.major && majors.includes(selectedParts.major)) entryMajorCategory.value = selectedParts.major;
+      renderSubCategorySelect(selected);
+    }
+
+    function renderSubCategorySelect(selected = "") {
+      const type = entryType?.value || "expense";
+      const major = entryMajorCategory.value;
+      const selectedValue = selected || entryCategory?.value || major;
+      const subs = subCategoryRows(type, major);
+      entryCategory.innerHTML = `<option value="${escapeHtml(major)}">대분류만 사용</option>` + subs.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(categorySub(c.name))}</option>`).join("");
+      if ([major, ...subs.map(c=>c.name)].includes(selectedValue)) entryCategory.value = selectedValue;
     }
 
     async function saveEntry() {
@@ -530,7 +570,7 @@
 
     function openDayModal(dateStr) {
       selectedDate = dateStr; const dayEntries = entries.filter(e => e.entry_date === dateStr); dayModalTitle.textContent = `${dateStr} 내역`;
-      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row" style="${getEntryRowBgStyle(e)}"><span>${entryTypeBadge(e)}</span><strong>${escapeHtml(e.category)}</strong><span>${escapeHtml(isTransferEntry(e) ? `${accountName(entryMeta(e).fromAccountId)} → ${accountName(entryMeta(e).toAccountId)}` : accountName(entryAccountId(e)))}<br><small>${escapeHtml(visibleMemo(e) || "-")}</small></span><strong>${money(e.amount)}</strong><button class="light" onclick='${isTransferEntry(e) ? "editTransfer" : "editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
+      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row" style="${getEntryRowBgStyle(e)}"><span>${entryTypeBadge(e)}</span><strong>${escapeHtml(categoryDisplay(e.category))}</strong><span>${escapeHtml(isTransferEntry(e) ? `${accountName(entryMeta(e).fromAccountId)} → ${accountName(entryMeta(e).toAccountId)}` : accountName(entryAccountId(e)))}<br><small>${escapeHtml(visibleMemo(e) || "-")}</small></span><strong>${money(e.amount)}</strong><button class="light" onclick='${isTransferEntry(e) ? "editTransfer" : "editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
       dayModal.classList.add("show");
     }
     function editEntry(entry) { closeModal("dayModal"); closeModal("historyModal"); openEntryModal(null, entry); }
@@ -618,14 +658,28 @@
       const spendExpense = list.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       const balanceExpense = list.filter(e=>e.type==="expense"&&!isTransferEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       historySummary.innerHTML = `<span>검색결과 ${list.length}건</span><span class="income">수입 ${money(income)}</span><span class="expense">사용금액 ${money(spendExpense)}</span><span class="balance">잔액 ${money(income-balanceExpense)}</span>`;
-      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>계좌·카드</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => { const m=entryMeta(e), accountText=isTransferEntry(e)?`${accountName(m.fromAccountId)} → ${accountName(m.toAccountId)}`:accountName(m.accountId); return `<tr><td>${e.entry_date}</td><td>${entryTypeBadge(e)}</td><td>${escapeHtml(e.category)}</td><td>${escapeHtml(accountText)}</td><td>${escapeHtml(visibleMemo(e) || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='${isTransferEntry(e)?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`; }).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
+      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>계좌·카드</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => { const m=entryMeta(e), accountText=isTransferEntry(e)?`${accountName(m.fromAccountId)} → ${accountName(m.toAccountId)}`:accountName(m.accountId); return `<tr><td>${e.entry_date}</td><td>${entryTypeBadge(e)}</td><td>${escapeHtml(categoryDisplay(e.category))}</td><td>${escapeHtml(accountText)}</td><td>${escapeHtml(visibleMemo(e) || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='${isTransferEntry(e)?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`; }).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
     }
 
     function openCategoryModal() { renderCategoryManager(); categoryModal.classList.add("show"); }
-    function renderCategoryManager() { const income=categories.filter(c=>c.type==="income"), expense=categories.filter(c=>c.type==="expense"); categoryList.innerHTML = `<h3>수입 카테고리</h3>${income.map(categoryRow).join("") || "<p>없음</p>"}<h3>지출 카테고리</h3>${expense.map(categoryRow).join("") || "<p>없음</p>"}`; }
-    function categoryRow(c) { return `<div class="category-row"><div>${escapeHtml(c.name)}</div><button class="danger" onclick="removeCategory('${c.id}')">제거</button></div>`; }
-    async function addCategory() { const type=categoryType.value, name=newCategoryName.value.trim(); if(!name){alert("카테고리명을 입력하세요.");return;} if(categories.some(c=>c.type===type&&c.name===name)){alert("이미 존재하는 카테고리입니다.");return;} if(cloudOnline&&db){try{const {error}=await db.from("moneybook_categories").insert({type,name});if(error)throw error;newCategoryName.value="";await loadCategories();return;}catch(error){showOffline(error);}} categories.push({id:uid(),type,name});cacheData({categories});newCategoryName.value="";renderCategoryManager();renderCategorySelect(); }
-    async function removeCategory(id) { if(!confirm("카테고리를 제거할까요? 기존 내역의 카테고리명은 그대로 남습니다."))return; if(cloudOnline&&db){try{const {error}=await db.from("moneybook_categories").delete().eq("id",id);if(error)throw error;await loadCategories();return;}catch(error){showOffline(error);}} categories=categories.filter(c=>String(c.id)!==String(id));cacheData({categories});renderCategoryManager();renderCategorySelect(); }
+    function renderCategoryManager() {
+      const type=categoryType.value, majors=majorCategoryNames(type);
+      subCategoryMajor.innerHTML=majors.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      categoryList.innerHTML=majors.length?majors.map(major=>{
+        const subs=subCategoryRows(type,major),safeMajor=encodeURIComponent(major).replace(/'/g,"%27");
+        return `<div class="category-group"><div class="category-group-head"><strong>${escapeHtml(major)}</strong><button class="danger" onclick="removeMajorCategory('${type}','${safeMajor}')">대분류 제거</button></div>${subs.length?subs.map(c=>`<div class="subcategory-row"><span>└ ${escapeHtml(categorySub(c.name))}</span><small>${escapeHtml(major)}</small><button class="danger" onclick="removeCategory('${c.id}')">제거</button></div>`).join(""):`<div class="subcategory-row"><span style="color:#6b7280;">등록된 소분류 없음</span><small></small><span></span></div>`}</div>`;
+      }).join(""):`<p style="color:#6b7280;text-align:center;">등록된 대분류가 없습니다.</p>`;
+    }
+    async function insertCategoryRecord(type,name) {
+      if(categories.some(c=>c.type===type&&c.name===name)){alert("이미 존재하는 카테고리입니다.");return false;}
+      if(cloudOnline&&db){try{const{error}=await db.from("moneybook_categories").insert({type,name});if(error)throw error;await loadCategories();return true;}catch(error){showOffline(error);}}
+      categories.push({id:uid(),type,name});cacheData({categories});refreshCategoryViews();return true;
+    }
+    async function addMajorCategory(){const type=categoryType.value,name=newMajorCategoryName.value.trim();if(!name){alert("대분류명을 입력하세요.");return;}if(name.includes(CATEGORY_SEPARATOR)){alert("카테고리명에는 ||| 문자를 사용할 수 없습니다.");return;}if(await insertCategoryRecord(type,name))newMajorCategoryName.value="";}
+    async function addSubCategory(){const type=categoryType.value,major=subCategoryMajor.value,sub=newSubCategoryName.value.trim();if(!major){alert("먼저 대분류를 추가하세요.");return;}if(!sub){alert("소분류명을 입력하세요.");return;}if(sub.includes(CATEGORY_SEPARATOR)){alert("카테고리명에는 ||| 문자를 사용할 수 없습니다.");return;}if(await insertCategoryRecord(type,makeSubCategory(major,sub)))newSubCategoryName.value="";}
+    async function removeCategory(id){if(!confirm("이 소분류를 제거할까요? 기존 내역은 그대로 유지됩니다."))return;if(cloudOnline&&db){try{const{error}=await db.from("moneybook_categories").delete().eq("id",id);if(error)throw error;await loadCategories();return;}catch(error){showOffline(error);}}categories=categories.filter(c=>String(c.id)!==String(id));cacheData({categories});refreshCategoryViews();}
+    async function removeMajorCategory(type,encodedMajor){const major=decodeURIComponent(encodedMajor),targets=categories.filter(c=>c.type===type&&categoryMajor(c.name)===major);if(!confirm(`'${major}' 대분류와 그 아래 소분류 ${targets.filter(c=>categorySub(c.name)).length}개를 제거할까요? 기존 내역은 유지됩니다.`))return;const ids=targets.map(c=>c.id).filter(Boolean);if(cloudOnline&&db&&ids.length){try{const{error}=await db.from("moneybook_categories").delete().in("id",ids);if(error)throw error;await loadCategories();return;}catch(error){showOffline(error);}}categories=categories.filter(c=>!targets.includes(c));cacheData({categories});refreshCategoryViews();}
+    function refreshCategoryViews(){renderCategoryManager();renderMajorCategorySelect();renderSummary();if(typeof fixedItemCategory!=="undefined")renderFixedCategorySelect();}
 
     async function loadFixedItems() {
       if (!cloudOnline || !db) { fixedItems = cachedData().fixedItems || fixedItems || []; return; }
@@ -644,8 +698,10 @@
     }
 
     function renderFixedCategorySelect(selected = "") {
-      const expenseCategories = categories.filter(c => c.type === "expense").map(c => c.name);
-      fixedItemCategory.innerHTML = expenseCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      fixedItemCategory.innerHTML = majorCategoryNames("expense").map(major => {
+        const subs=subCategoryRows("expense",major);
+        return `<optgroup label="${escapeHtml(major)}"><option value="${escapeHtml(major)}">${escapeHtml(major)} - 대분류만</option>${subs.map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(categorySub(c.name))}</option>`).join("")}</optgroup>`;
+      }).join("");
       if (selected) fixedItemCategory.value = selected;
     }
 
@@ -694,7 +750,7 @@
             />
             <strong style="color:#dc2626;">일</strong>
           </span>
-          <strong>${escapeHtml(item.category)}</strong>
+          <strong>${escapeHtml(categoryDisplay(item.category))}</strong>
           <span>${escapeHtml(accountName(entryMeta(item).accountId))}<br><small>${escapeHtml(visibleMemo(item) || "-")}</small></span>
           <strong>${money(item.amount)}</strong>
           <div style="display:flex;gap:6px;flex-wrap:nowrap;">
@@ -804,9 +860,12 @@
 
     function openChartModal() { chartModal.classList.add("show"); renderChart(); }
     function renderChart() {
-      const expenseEntries = entries.filter(e => e.type === "expense" && !isTransferEntry(e)); const grouped = {}; expenseEntries.forEach(e => grouped[e.category] = (grouped[e.category] || 0) + Number(e.amount));
-      const labels = Object.keys(grouped), values = Object.values(grouped); chartEmpty.style.display = labels.length ? "none" : "block"; if (chartInstance) chartInstance.destroy(); if (!labels.length) return;
-      chartInstance = new Chart(categoryChart, { type: "pie", data: { labels, datasets: [{ data: values }] }, options: { plugins: { tooltip: { callbacks: { label: ctx => { const total=values.reduce((a,b)=>a+b,0), value=ctx.raw, percent=total?Math.round(value/total*100):0; return `${ctx.label}: ${money(value)} (${percent}%)`; } } } } } });
+      const expenseEntries=entries.filter(e=>e.type==="expense"&&!isTransferEntry(e)), grouped={}, detail={};
+      expenseEntries.forEach(e=>{const p=splitCategory(e.category),major=p.major||"미분류",sub=p.sub||"미분류",amount=Number(e.amount||0);grouped[major]=(grouped[major]||0)+amount;detail[major]??={};detail[major][sub]=(detail[major][sub]||0)+amount;});
+      const labels=Object.keys(grouped).sort((a,b)=>grouped[b]-grouped[a]),values=labels.map(k=>grouped[k]);chartEmpty.style.display=labels.length?"none":"block";if(chartInstance)chartInstance.destroy();
+      categoryBreakdown.innerHTML=labels.map(major=>`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(major)}</span><span>${money(grouped[major])}</span></div>${Object.entries(detail[major]).sort((a,b)=>b[1]-a[1]).map(([sub,amount])=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(amount)}</strong></div>`).join("")}</div>`).join("");
+      if(!labels.length)return;
+      chartInstance=new Chart(categoryChart,{type:"pie",data:{labels,datasets:[{data:values}]},options:{plugins:{tooltip:{callbacks:{label:ctx=>{const total=values.reduce((a,b)=>a+b,0),value=ctx.raw,percent=total?Math.round(value/total*100):0;return `${ctx.label}: ${money(value)} (${percent}%)`;}}}}}});
     }
 
     function closeModal(id) { document.getElementById(id).classList.remove("show"); }
