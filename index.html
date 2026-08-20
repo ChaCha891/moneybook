@@ -257,6 +257,7 @@
 
   <div id="chartModal" class="modal-backdrop"><div class="modal">
     <h2>대분류·소분류별 지출 분석</h2>
+    <div style="margin-bottom:14px;"><label>조회할 대분류</label><select id="chartMajorFilter" onchange="renderChart()"><option value="all">전체 대분류</option></select></div>
     <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
     <div id="chartEmpty" style="display:none; text-align:center; color:#6b7280; margin-top:20px;">이번 달 지출 내역이 없습니다.</div>
     <div id="categoryBreakdown"></div>
@@ -893,12 +894,20 @@
       renderFixedItemList();
     }
 
-    function openChartModal() { chartModal.classList.add("show"); renderChart(); }
+    function openChartModal() { populateChartMajorFilter(); chartModal.classList.add("show"); renderChart(); }
+    function populateChartMajorFilter() {
+      const entryMajors=entries.filter(e=>e.type==="expense"&&!isTransferEntry(e)).map(e=>categoryMajor(e.category)).filter(Boolean);
+      const majors=[...new Set([...majorCategoryNames("expense"),...majorCategoryNames("credit_card"),...entryMajors])].sort((a,b)=>a.localeCompare(b,"ko"));
+      const previous=chartMajorFilter.value||"all";
+      chartMajorFilter.innerHTML=`<option value="all">전체 대분류</option>`+majors.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      chartMajorFilter.value=majors.includes(previous)?previous:"all";
+    }
     function renderChart() {
-      const expenseEntries=entries.filter(e=>e.type==="expense"&&!isTransferEntry(e)), grouped={}, detail={};
-      expenseEntries.forEach(e=>{const p=splitCategory(e.category),major=p.major||"미분류",sub=p.sub||"미분류",amount=Number(e.amount||0);grouped[major]=(grouped[major]||0)+amount;detail[major]??={};detail[major][sub]=(detail[major][sub]||0)+amount;});
+      const selected=chartMajorFilter.value||"all",expenseEntries=entries.filter(e=>e.type==="expense"&&!isTransferEntry(e)),grouped={},detail={};
+      expenseEntries.forEach(e=>{const p=splitCategory(e.category),major=p.major||"미분류",sub=p.sub||"미분류",amount=Number(e.amount||0);if(selected!=="all"&&major!==selected)return;if(selected==="all"){grouped[major]=(grouped[major]||0)+amount;detail[major]??={};detail[major][sub]=(detail[major][sub]||0)+amount;}else{grouped[sub]=(grouped[sub]||0)+amount;}});
       const labels=Object.keys(grouped).sort((a,b)=>grouped[b]-grouped[a]),values=labels.map(k=>grouped[k]);chartEmpty.style.display=labels.length?"none":"block";if(chartInstance)chartInstance.destroy();
-      categoryBreakdown.innerHTML=labels.map(major=>`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(major)}</span><span>${money(grouped[major])}</span></div>${Object.entries(detail[major]).sort((a,b)=>b[1]-a[1]).map(([sub,amount])=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(amount)}</strong></div>`).join("")}</div>`).join("");
+      if(selected==="all")categoryBreakdown.innerHTML=labels.map(major=>`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(major)}</span><span>${money(grouped[major])}</span></div>${Object.entries(detail[major]).sort((a,b)=>b[1]-a[1]).map(([sub,amount])=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(amount)}</strong></div>`).join("")}</div>`).join("");
+      else{const total=values.reduce((a,b)=>a+b,0);categoryBreakdown.innerHTML=labels.length?`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(selected)}</span><span>${money(total)}</span></div>${labels.map(sub=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(grouped[sub])}</strong></div>`).join("")}</div>`:"";}
       if(!labels.length)return;
       chartInstance=new Chart(categoryChart,{type:"pie",data:{labels,datasets:[{data:values}]},options:{plugins:{tooltip:{callbacks:{label:ctx=>{const total=values.reduce((a,b)=>a+b,0),value=ctx.raw,percent=total?Math.round(value/total*100):0;return `${ctx.label}: ${money(value)} (${percent}%)`;}}}}}});
     }
