@@ -104,6 +104,8 @@
     .breakdown-group { margin-top:12px; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
     .breakdown-major { display:flex; justify-content:space-between; gap:10px; padding:12px; background:#f9fafb; font-weight:900; }
     .breakdown-sub { display:flex; justify-content:space-between; gap:10px; padding:9px 16px; border-top:1px solid var(--line); }
+    .breakdown-check-label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+    .breakdown-check-label input[type="checkbox"] { width:20px; height:20px; margin:0; accent-color:var(--pink); }
 
     .connection-status { display:none; margin-bottom:12px; padding:11px 13px; border-radius:12px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-weight:800; }
     .connection-status.show { display:flex; justify-content:space-between; align-items:center; gap:10px; }
@@ -260,6 +262,7 @@
     <div style="margin-bottom:14px;"><label>조회할 대분류</label><select id="chartMajorFilter" onchange="renderChart()"><option value="all">전체 대분류</option></select></div>
     <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
     <div id="chartEmpty" style="display:none; text-align:center; color:#6b7280; margin-top:20px;">이번 달 지출 내역이 없습니다.</div>
+    <div id="chartSelectionStatus" style="display:none; margin-top:12px; padding:10px 12px; border-radius:12px; background:#fff1f7; color:#9d174d; font-weight:800;"></div>
     <div id="categoryBreakdown"></div>
     <div class="modal-actions"><button class="light" onclick="closeModal('chartModal')">닫기</button></div>
   </div></div>
@@ -299,6 +302,7 @@
     let categories = [];
     let selectedDate = null;
     let chartInstance = null;
+    let selectedChartMajors = new Set();
     let fixedItems = [];
     let selectedAccountId = "all";
     let accountActivityExpanded = false;
@@ -902,12 +906,22 @@
       chartMajorFilter.innerHTML=`<option value="all">전체 대분류</option>`+majors.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
       chartMajorFilter.value=majors.includes(previous)?previous:"all";
     }
+    function toggleChartMajorSelection(encodedMajor,checked) { const major=decodeURIComponent(encodedMajor); if(checked)selectedChartMajors.add(major);else selectedChartMajors.delete(major);renderChart(); }
+    function clearChartMajorSelection() { selectedChartMajors.clear(); renderChart(); }
     function renderChart() {
-      const selected=chartMajorFilter.value||"all",expenseEntries=entries.filter(e=>e.type==="expense"&&!isTransferEntry(e)),grouped={},detail={};
-      expenseEntries.forEach(e=>{const p=splitCategory(e.category),major=p.major||"미분류",sub=p.sub||"미분류",amount=Number(e.amount||0);if(selected!=="all"&&major!==selected)return;if(selected==="all"){grouped[major]=(grouped[major]||0)+amount;detail[major]??={};detail[major][sub]=(detail[major][sub]||0)+amount;}else{grouped[sub]=(grouped[sub]||0)+amount;}});
-      const labels=Object.keys(grouped).sort((a,b)=>grouped[b]-grouped[a]),values=labels.map(k=>grouped[k]);chartEmpty.style.display=labels.length?"none":"block";if(chartInstance)chartInstance.destroy();
-      if(selected==="all")categoryBreakdown.innerHTML=labels.map(major=>`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(major)}</span><span>${money(grouped[major])}</span></div>${Object.entries(detail[major]).sort((a,b)=>b[1]-a[1]).map(([sub,amount])=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(amount)}</strong></div>`).join("")}</div>`).join("");
-      else{const total=values.reduce((a,b)=>a+b,0);categoryBreakdown.innerHTML=labels.length?`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(selected)}</span><span>${money(total)}</span></div>${labels.map(sub=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(grouped[sub])}</strong></div>`).join("")}</div>`:"";}
+      const selected=chartMajorFilter.value||"all",expenseEntries=entries.filter(e=>e.type==="expense"&&!isTransferEntry(e)),majorTotals={},detail={};
+      expenseEntries.forEach(e=>{const p=splitCategory(e.category),major=p.major||"미분류",sub=p.sub||"미분류",amount=Number(e.amount||0);majorTotals[major]=(majorTotals[major]||0)+amount;detail[major]??={};detail[major][sub]=(detail[major][sub]||0)+amount;});
+      const allMajors=Object.keys(majorTotals).sort((a,b)=>majorTotals[b]-majorTotals[a]);selectedChartMajors=new Set([...selectedChartMajors].filter(name=>allMajors.includes(name)));
+      let labels=[],values=[];
+      if(selected==="all"){
+        labels=selectedChartMajors.size?allMajors.filter(name=>selectedChartMajors.has(name)):allMajors;values=labels.map(name=>majorTotals[name]);
+        categoryBreakdown.innerHTML=allMajors.map(major=>{const safeMajor=encodeURIComponent(major).replace(/'/g,"%27"),checked=selectedChartMajors.has(major)?"checked":"";return `<div class="breakdown-group"><div class="breakdown-major"><label class="breakdown-check-label"><input type="checkbox" ${checked} onchange="toggleChartMajorSelection('${safeMajor}',this.checked)"><span>${escapeHtml(major)}</span></label><span>${money(majorTotals[major])}</span></div>${Object.entries(detail[major]).sort((a,b)=>b[1]-a[1]).map(([sub,amount])=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(amount)}</strong></div>`).join("")}</div>`;}).join("");
+        chartSelectionStatus.style.display=selectedChartMajors.size?"flex":"none";chartSelectionStatus.style.justifyContent="space-between";chartSelectionStatus.style.alignItems="center";chartSelectionStatus.innerHTML=selectedChartMajors.size?`<span>체크한 대분류 ${selectedChartMajors.size}개만 표시 중</span><button class="light" onclick="clearChartMajorSelection()">선택 해제</button>`:"";
+      }else{
+        const subTotals=detail[selected]||{};labels=Object.keys(subTotals).sort((a,b)=>subTotals[b]-subTotals[a]);values=labels.map(name=>subTotals[name]);const total=values.reduce((a,b)=>a+b,0);
+        categoryBreakdown.innerHTML=labels.length?`<div class="breakdown-group"><div class="breakdown-major"><span>${escapeHtml(selected)}</span><span>${money(total)}</span></div>${labels.map(sub=>`<div class="breakdown-sub"><span>└ ${escapeHtml(sub)}</span><strong>${money(subTotals[sub])}</strong></div>`).join("")}</div>`:"";chartSelectionStatus.style.display="none";chartSelectionStatus.innerHTML="";
+      }
+      chartEmpty.style.display=labels.length?"none":"block";if(chartInstance)chartInstance.destroy();
       if(!labels.length)return;
       chartInstance=new Chart(categoryChart,{type:"pie",data:{labels,datasets:[{data:values}]},options:{plugins:{tooltip:{callbacks:{label:ctx=>{const total=values.reduce((a,b)=>a+b,0),value=ctx.raw,percent=total?Math.round(value/total*100):0;return `${ctx.label}: ${money(value)} (${percent}%)`;}}}}}});
     }
