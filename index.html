@@ -181,7 +181,7 @@
             <option value="cash">계좌·카드 잔액</option>
             <option value="savings">적금 통장 조회</option>
           </select>
-          <small id="accountGroupHint" style="color:#6b7280;display:block;margin-top:6px;">계좌를 선택하면 해당 계좌의 전체 내역을 볼 수 있습니다.</small>
+          <small id="accountGroupHint" style="color:#6b7280;display:block;margin-top:6px;">계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.</small>
         </div>
         <div class="actions" style="margin:0;"><button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button></div>
       </div>
@@ -666,7 +666,7 @@
     function renderAccounts() {
       const active = visibleGroupAccounts();
       if (accountGroupSelect) accountGroupSelect.value = selectedAccountGroup;
-      if (accountGroupHint) accountGroupHint.textContent = selectedAccountGroup === "savings" ? "적금 통장을 선택하면 해당 통장의 전체 내역을 볼 수 있습니다." : "계좌를 선택하면 해당 계좌의 전체 내역을 볼 수 있습니다.";
+      if (accountGroupHint) accountGroupHint.textContent = selectedAccountGroup === "savings" ? "적금 통장을 선택하면 현재 선택한 달의 내역을 볼 수 있습니다." : "계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.";
       if (selectedAccountId !== "all" && !active.some(a => a.id === selectedAccountId)) selectedAccountId = "all";
       const total = active.reduce((sum, a) => sum + accountBalance(a.id), 0);
       const totalLabel = selectedAccountGroup === "savings" ? "전체 적금 통장" : "전체 계좌·카드";
@@ -682,10 +682,14 @@
     function toggleAccountActivity() { accountActivityExpanded = !accountActivityExpanded; renderAccountTransfers(); }
 
     function renderAccountTransfers() {
-      let list = [...allEntries].sort((a,b) => a.entry_date === b.entry_date ? String(b.created_at||"").localeCompare(String(a.created_at||"")) : b.entry_date.localeCompare(a.entry_date));
+      // 계좌/카드 잔액은 전체 기간의 거래를 반영하되, 화면의 거래내역은 현재 선택한 달만 표시한다.
+      // 이전 달 거래는 DB에서 삭제하지 않으며 월간보고서/해당 월 조회에서 그대로 확인할 수 있다.
+      const { start, end } = monthRange();
+      let list = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end)
+        .sort((a,b) => a.entry_date === b.entry_date ? String(b.created_at||"").localeCompare(String(a.created_at||"")) : b.entry_date.localeCompare(a.entry_date));
       if (selectedAccountId !== "all") list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? m.fromAccountId === selectedAccountId || m.toAccountId === selectedAccountId : m.accountId === selectedAccountId; });
       else { const ids = new Set(visibleGroupAccounts().map(a=>a.id)); list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? ids.has(m.fromAccountId) || ids.has(m.toAccountId) : ids.has(m.accountId); }); }
-      const title = selectedAccountId === "all" ? (selectedAccountGroup === "savings" ? "전체 적금 통장 내역" : "전체 계좌·카드 내역") : `${accountName(selectedAccountId)} 전체 내역`;
+      const title = selectedAccountId === "all" ? (selectedAccountGroup === "savings" ? "이번 달 전체 적금 통장 내역" : "이번 달 전체 계좌·카드 내역") : `${accountName(selectedAccountId)} 이번 달 내역`;
       const toggle=`<button class="activity-toggle" onclick="toggleAccountActivity()"><span>${escapeHtml(title)} <small style="color:#6b7280;">(${list.length}건)</small></span><strong>${accountActivityExpanded?"▲ 접기":"▼ 내역 보기"}</strong></button>`;
       if(!accountActivityExpanded){accountTransferList.innerHTML=toggle;return;}
       const rows=list.length?list.map(e=>{
