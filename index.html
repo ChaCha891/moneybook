@@ -133,6 +133,15 @@
       .account-list { grid-template-columns:1fr 1fr; }
       .transfer-row, .account-manage-row { grid-template-columns:1fr; background:#f9fafb; border-radius:12px; padding:10px; margin:8px 0; }
     }
+
+    /* AI 빠른입력 / 월간보고서 */
+    .quick-panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 4px 18px rgba(15,23,42,.05)}
+    .quick-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.quick-row input{font-size:16px;padding:13px 14px}
+    .quick-hint{font-size:12px;color:#6b7280;margin-top:8px}.ai-badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#ede9fe;color:#6d28d9;font-weight:800;font-size:11px}
+    .ai-preview{display:none;margin-top:12px;padding:12px;border-radius:12px;background:#f8fafc;border:1px solid var(--line)}
+    .report-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}.report-box{padding:12px;border:1px solid var(--line);border-radius:12px;background:#f9fafb}.report-box small{color:#6b7280}.report-box strong{display:block;font-size:18px;margin-top:4px}
+    .report-table{width:100%;border-collapse:collapse;font-size:13px}.report-table th,.report-table td{border-bottom:1px solid var(--line);padding:8px;text-align:left}.report-table td:last-child,.report-table th:last-child{text-align:right}
+    @media(max-width:700px){.quick-row{grid-template-columns:1fr}.report-summary{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -151,6 +160,14 @@
 
     <div id="connectionStatus" class="connection-status"><span id="connectionMessage"></span><button class="light" onclick="retryConnection()">재연결</button></div>
 
+
+    <section class="quick-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px"><div><strong style="font-size:18px">빠른 입력</strong> <span class="ai-badge">AI 자동분류</span></div><button class="light" onclick="openMonthlyReport()">월간 보고서</button></div>
+      <div class="quick-row"><input id="quickInput" placeholder="예: 9월 11일 신한카드 국밥 12000 / 토스 편의점 8500" onkeydown="if(event.key==='Enter') analyzeQuickInput()"><button id="quickAnalyzeBtn" onclick="analyzeQuickInput()">분석</button></div>
+      <div class="quick-hint">날짜를 생략하면 오늘로 처리합니다. AI가 기존 카테고리와 과거 수정 기록을 참고해 분류합니다.</div>
+      <div id="quickPreview" class="ai-preview"></div>
+    </section>
+
     <section class="summary">
       <div class="summary-card"><div class="label"><span id="incomeSummaryLabel">총수입</span></div><select id="incomeSummaryCategory" onchange="renderSummary()" style="margin-bottom:8px;"></select><div id="totalIncome" class="value income">0원</div></div>
       <div class="summary-card"><div class="label"><span id="expenseSummaryLabel">총지출</span></div><select id="expenseSummaryCategory" onchange="renderSummary()" style="margin-bottom:8px;"></select><div id="totalExpense" class="value expense">0원</div></div>
@@ -159,7 +176,13 @@
 
     <section class="account-panel">
       <div class="account-head">
-        <div><h2 style="margin:0 0 4px;">계좌·카드 잔액</h2><small style="color:#6b7280;">계좌를 선택하면 해당 계좌의 이체 내역을 볼 수 있습니다.</small></div>
+        <div>
+          <select id="accountGroupSelect" onchange="changeAccountGroup(this.value)" style="font-size:20px;font-weight:900;border:1px solid #e5e7eb;border-radius:12px;padding:9px 12px;background:white;min-width:210px;">
+            <option value="cash">계좌·카드 잔액</option>
+            <option value="savings">적금 통장 조회</option>
+          </select>
+          <small id="accountGroupHint" style="color:#6b7280;display:block;margin-top:6px;">계좌를 선택하면 해당 계좌의 전체 내역을 볼 수 있습니다.</small>
+        </div>
         <div class="actions" style="margin:0;"><button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button></div>
       </div>
       <div id="accountList" class="account-list"></div>
@@ -285,10 +308,18 @@
     <div class="form-grid">
       <div><label>새 계좌·카드 이름</label><input id="newAccountName" placeholder="예: 국민은행 통장" /></div>
       <div><label>시작 잔액</label><input type="number" id="newAccountBalance" value="0" /></div>
+      <div><label>계좌 구분</label><select id="newAccountGroup"><option value="cash">계좌·카드</option><option value="savings">적금 통장</option></select></div>
     </div>
     <div class="modal-actions"><button onclick="addAccount()">추가</button></div>
     <div id="accountManageList" class="entry-list"></div>
     <div class="modal-actions"><button class="light" onclick="closeModal('accountManageModal')">닫기</button></div>
+  </div></div>
+
+
+  <div id="monthlyReportModal" class="modal-backdrop"><div class="modal" style="max-width:900px">
+    <h2 id="monthlyReportTitle">월간 가계부 보고서</h2>
+    <div id="monthlyReportBody"></div>
+    <div class="modal-actions"><button class="light" onclick="closeModal('monthlyReportModal')">닫기</button><button class="secondary" onclick="downloadMonthlyCSV()">CSV 저장</button><button onclick="printMonthlyReport()">PDF / 인쇄</button></div>
   </div></div>
 
   <script>
@@ -305,18 +336,23 @@
     let selectedChartMajors = new Set();
     let fixedItems = [];
     let selectedAccountId = "all";
+    let selectedAccountGroup = "cash";
     let accountActivityExpanded = false;
     let cloudOnline = true;
     let accountConfigId = null;
 
     const ACCOUNT_STORE = "moneybook_accounts_v2";
     const CACHE_STORE = "moneybook_offline_cache_v2";
+    const AI_MEMORY_STORE = "moneybook_ai_memory_v1";
+    // Supabase Edge Function을 배포하면 true AI 분류가 활성화됩니다. 비어 있으면 학습기록+로컬 분석으로 동작합니다.
+    const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/moneybook-ai`;
+
     const ACCOUNT_CONFIG_CATEGORY = "__MONEYBOOK_ACCOUNT_CONFIG__";
     const CREDIT_CATEGORY_PREFIX = "__CREDIT_CARD__::";
     let accounts = JSON.parse(localStorage.getItem(ACCOUNT_STORE) || "null") || [
-      { id: "nh_check", name: "농협 체크카드", openingBalance: 0, active: true },
-      { id: "toss_check", name: "토스체크카드", openingBalance: 0, active: true },
-      { id: "shinhan_credit", name: "신한신용카드", openingBalance: 0, active: true }
+      { id: "nh_check", name: "농협 체크카드", openingBalance: 0, active: true, group: "cash" },
+      { id: "toss_check", name: "토스체크카드", openingBalance: 0, active: true, group: "cash" },
+      { id: "shinhan_credit", name: "신한신용카드", openingBalance: 0, active: true, group: "cash" }
     ];
 
     const defaultCategories = [
@@ -349,10 +385,12 @@
     function monthRange() { const y=currentDate.getFullYear(), m=currentDate.getMonth(); return { start: ymd(new Date(y,m,1)), end: ymd(new Date(y,m+1,0)), y, m }; }
 
     function uid() { return crypto.randomUUID?.() || `id_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
-    function ensureCreditAccount() { let account=accounts.find(a=>a.fixedCreditCard)||accounts.find(a=>String(a.name||"").includes("신용카드")); if(!account){account={id:"credit_card_fixed",name:"신용카드",openingBalance:0,active:true,fixedCreditCard:true};accounts.push(account);} account.name="신용카드";account.openingBalance=0;account.active=true;account.fixedCreditCard=true;localStorage.setItem(ACCOUNT_STORE,JSON.stringify(accounts));return account; }
+    function ensureCreditAccount() { let account=accounts.find(a=>a.fixedCreditCard)||accounts.find(a=>String(a.name||"").includes("신용카드")); if(!account){account={id:"credit_card_fixed",name:"신용카드",openingBalance:0,active:true,fixedCreditCard:true};accounts.push(account);} account.name="신용카드";account.openingBalance=0;account.active=true;account.fixedCreditCard=true;account.group="cash";localStorage.setItem(ACCOUNT_STORE,JSON.stringify(accounts));return account; }
     function creditAccountId() { return ensureCreditAccount().id; }
     function saveAccounts() { ensureCreditAccount(); localStorage.setItem(ACCOUNT_STORE, JSON.stringify(accounts)); persistAccounts(); }
+    function accountGroup(a) { return a?.group === "savings" ? "savings" : "cash"; }
     function activeAccounts() { return accounts.filter(a => a.active !== false); }
+    function visibleGroupAccounts() { return activeAccounts().filter(a => accountGroup(a) === selectedAccountGroup); }
     function accountName(id) { return accounts.find(a => a.id === id)?.name || "계좌 미지정"; }
     function cacheData(patch) { const old = JSON.parse(localStorage.getItem(CACHE_STORE) || "{}"); localStorage.setItem(CACHE_STORE, JSON.stringify({ ...old, ...patch })); }
     function cachedData() { return JSON.parse(localStorage.getItem(CACHE_STORE) || "{}"); }
@@ -590,6 +628,9 @@
       } catch (error) {
         showOffline(error); if (id) { const i=allEntries.findIndex(e=>String(e.id)===String(id)); if(i>=0) allEntries[i]={...allEntries[i],...payload}; } else allEntries.push({...payload,id:uid(),created_at:new Date().toISOString()}); cacheData({entries:allEntries});
       }
+      // 빠른입력에서 AI가 제안한 분류를 사용자가 수정했다면 다음 분류에 반영
+      const metaBefore = entryId.value ? entryMeta(allEntries.find(e=>String(e.id)===String(entryId.value)) || {}) : {};
+      if (metaBefore?.aiRaw && metaBefore?.aiSuggestedCategory && metaBefore.aiSuggestedCategory !== payload.category) rememberAICorrection(metaBefore.aiRaw, payload.category, selectedType);
       closeModal("entryModal"); await loadData();
     }
 
@@ -623,23 +664,28 @@
     }
 
     function renderAccounts() {
-      const active = activeAccounts();
+      const active = visibleGroupAccounts();
+      if (accountGroupSelect) accountGroupSelect.value = selectedAccountGroup;
+      if (accountGroupHint) accountGroupHint.textContent = selectedAccountGroup === "savings" ? "적금 통장을 선택하면 해당 통장의 전체 내역을 볼 수 있습니다." : "계좌를 선택하면 해당 계좌의 전체 내역을 볼 수 있습니다.";
       if (selectedAccountId !== "all" && !active.some(a => a.id === selectedAccountId)) selectedAccountId = "all";
       const total = active.reduce((sum, a) => sum + accountBalance(a.id), 0);
-      accountList.innerHTML = `<button class="account-box ${selectedAccountId === "all" ? "active" : ""}" onclick="selectAccount('all')"><small>전체 계좌·카드</small><strong class="${total < 0 ? "expense" : "balance"}">${money(total)}</strong></button>` + active.map(a => {
+      const totalLabel = selectedAccountGroup === "savings" ? "전체 적금 통장" : "전체 계좌·카드";
+      accountList.innerHTML = `<button class="account-box ${selectedAccountId === "all" ? "active" : ""}" onclick="selectAccount('all')"><small>${totalLabel}</small><strong class="${total < 0 ? "expense" : "balance"}">${money(total)}</strong></button>` + active.map(a => {
         const value = accountBalance(a.id);
         return `<button class="account-box ${selectedAccountId === a.id ? "active" : ""}" onclick="selectAccount('${a.id}')"><small>${escapeHtml(a.name)}</small><strong class="${value < 0 ? "expense" : "balance"}">${money(value)}</strong></button>`;
       }).join("");
       renderAccountTransfers();
     }
 
+    function changeAccountGroup(group) { selectedAccountGroup = group === "savings" ? "savings" : "cash"; selectedAccountId = "all"; accountActivityExpanded = false; renderAccounts(); }
     function selectAccount(id) { selectedAccountId = id; accountActivityExpanded = false; renderAccounts(); }
     function toggleAccountActivity() { accountActivityExpanded = !accountActivityExpanded; renderAccountTransfers(); }
 
     function renderAccountTransfers() {
       let list = [...allEntries].sort((a,b) => a.entry_date === b.entry_date ? String(b.created_at||"").localeCompare(String(a.created_at||"")) : b.entry_date.localeCompare(a.entry_date));
       if (selectedAccountId !== "all") list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? m.fromAccountId === selectedAccountId || m.toAccountId === selectedAccountId : m.accountId === selectedAccountId; });
-      const title = selectedAccountId === "all" ? "전체 계좌·카드 내역" : `${accountName(selectedAccountId)} 전체 내역`;
+      else { const ids = new Set(visibleGroupAccounts().map(a=>a.id)); list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? ids.has(m.fromAccountId) || ids.has(m.toAccountId) : ids.has(m.accountId); }); }
+      const title = selectedAccountId === "all" ? (selectedAccountGroup === "savings" ? "전체 적금 통장 내역" : "전체 계좌·카드 내역") : `${accountName(selectedAccountId)} 전체 내역`;
       const toggle=`<button class="activity-toggle" onclick="toggleAccountActivity()"><span>${escapeHtml(title)} <small style="color:#6b7280;">(${list.length}건)</small></span><strong>${accountActivityExpanded?"▲ 접기":"▼ 내역 보기"}</strong></button>`;
       if(!accountActivityExpanded){accountTransferList.innerHTML=toggle;return;}
       const rows=list.length?list.map(e=>{
@@ -681,9 +727,9 @@
       closeModal("transferModal"); await loadData();
     }
 
-    function openAccountManageModal() { renderAccountManager(); accountManageModal.classList.add("show"); }
-    function renderAccountManager() { accountManageList.innerHTML = activeAccounts().map(a => a.fixedCreditCard?`<div class="account-manage-row"><input value="신용카드" disabled><input type="number" value="0" disabled><button disabled>고정</button></div>`:`<div class="account-manage-row"><input value="${escapeHtml(a.name)}" onchange="updateAccount('${a.id}','name',this.value)"><input type="number" value="${Number(a.openingBalance || 0)}" onchange="updateAccount('${a.id}','openingBalance',this.value)"><button class="danger" onclick="removeAccount('${a.id}')">제거</button></div>`).join(""); }
-    function addAccount() { const name=newAccountName.value.trim(); if(!name){alert("계좌·카드 이름을 입력하세요.");return;} if(activeAccounts().some(a=>a.name===name)){alert("같은 이름이 이미 있습니다.");return;} accounts.push({id:uid(),name,openingBalance:Number(newAccountBalance.value||0),active:true}); saveAccounts(); newAccountName.value="";newAccountBalance.value=0;renderAccountManager();renderAccounts(); }
+    function openAccountManageModal() { newAccountGroup.value = selectedAccountGroup; renderAccountManager(); accountManageModal.classList.add("show"); }
+    function renderAccountManager() { accountManageList.innerHTML = activeAccounts().map(a => a.fixedCreditCard?`<div class="account-manage-row"><input value="신용카드" disabled><input type="number" value="0" disabled><button disabled>고정</button></div>`:`<div class="account-manage-row"><input value="${escapeHtml(a.name)}" onchange="updateAccount('${a.id}','name',this.value)"><input type="number" value="${Number(a.openingBalance || 0)}" onchange="updateAccount('${a.id}','openingBalance',this.value)"><button class="danger" onclick="removeAccount('${a.id}')">제거</button><small style="grid-column:1/-1;color:#6b7280;">${accountGroup(a)==="savings"?"적금 통장":"계좌·카드"}</small></div>`).join(""); }
+    function addAccount() { const name=newAccountName.value.trim(); if(!name){alert("계좌·카드 이름을 입력하세요.");return;} if(activeAccounts().some(a=>a.name===name)){alert("같은 이름이 이미 있습니다.");return;} accounts.push({id:uid(),name,openingBalance:Number(newAccountBalance.value||0),active:true,group:newAccountGroup.value==="savings"?"savings":"cash"}); saveAccounts(); newAccountName.value="";newAccountBalance.value=0;renderAccountManager();renderAccounts(); }
     function updateAccount(id,key,value) { const a=accounts.find(x=>x.id===id); if(!a||a.fixedCreditCard)return; a[key]=key==="openingBalance"?Number(value||0):String(value).trim(); saveAccounts(); renderAccounts(); }
     function removeAccount(id) { const a=accounts.find(x=>x.id===id); if(!a)return;if(a.fixedCreditCard){alert("신용카드는 고정 계좌라 제거할 수 없습니다.");return;}if(!confirm(`'${a.name}'을 목록에서 제거할까요? 기존 내역은 유지됩니다.`))return; a.active=false; saveAccounts(); renderAccountManager(); renderAccounts(); }
 
@@ -929,6 +975,91 @@
     function closeModal(id) { document.getElementById(id).classList.remove("show"); }
     function escapeHtml(value) { return String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;"); }
     init();
+
+    // ---------- AI 빠른입력 ----------
+    function aiMemories(){ try{return JSON.parse(localStorage.getItem(AI_MEMORY_STORE)||"[]");}catch{return [];} }
+    function rememberAICorrection(raw, category, type="expense"){
+      const key=String(raw||"").trim().toLowerCase(); if(!key||!category)return;
+      let list=aiMemories().filter(x=>x.key!==key); list.unshift({key,raw:String(raw).trim(),category,type,updatedAt:new Date().toISOString()});
+      localStorage.setItem(AI_MEMORY_STORE,JSON.stringify(list.slice(0,100)));
+    }
+    function normalizeQuickType(v){ return v==="income"?"income":v==="credit_card"?"credit_card":"expense"; }
+    function localQuickParse(raw){
+      const text=String(raw||"").trim(), now=new Date(); let date=ymd(now);
+      let m=text.match(/(?:(\d{4})[.\-/년]\s*)?(\d{1,2})[.\-/월]\s*(\d{1,2})(?:일)?/);
+      if(m){const y=Number(m[1]||now.getFullYear()),mo=Number(m[2]),d=Number(m[3]);date=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
+      else {m=text.match(/(\d{1,2})일/);if(m)date=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(Number(m[1])).padStart(2,"0")}`;}
+      const nums=[...text.matchAll(/(?:^|\s)(\d[\d,]*)(?:원)?(?=\s|$)/g)].map(x=>Number(x[1].replace(/,/g,""))).filter(n=>n>0);
+      const amount=nums.length?nums[nums.length-1]:0;
+      const account=activeAccounts().find(a=>text.replace(/\s/g,"").includes(String(a.name).replace(/\s/g,""))) || activeAccounts().find(a=>{const n=a.name.replace(/체크카드|신용카드|카드|은행|\s/g,"");return n&&text.includes(n);});
+      const credit=account?.fixedCreditCard||String(account?.name||"").includes("신용카드");
+      const type=credit?"credit_card":/급여|월급|입금|수입/.test(text)?"income":"expense";
+      const memories=aiMemories(); const hit=memories.find(x=>text.toLowerCase().includes(x.key)||x.key.includes(text.toLowerCase()));
+      let category=hit?.category||"";
+      if(!category){ const majors=majorCategoryNames(type); category=majorCategoryValue(type,majors.includes("기타")?"기타":majors[0]||""); }
+      return {date,type,amount,accountId:account?.id||"",category,memo:text,confidence:hit?0.95:0.45,source:hit?"학습기록":"로컬분석"};
+    }
+    async function analyzeQuickInput(){
+      const raw=quickInput.value.trim(); if(!raw){alert("내용을 한 줄로 입력하세요.");return;}
+      quickAnalyzeBtn.disabled=true;quickAnalyzeBtn.textContent="분석 중...";let result=null;
+      try{
+        const payload={text:raw,today:ymd(new Date()),accounts:activeAccounts().map(a=>({id:a.id,name:a.name,credit:!!a.fixedCreditCard||a.name.includes("신용카드")})),categories:["expense","income","credit_card"].flatMap(t=>majorCategoryNames(t).flatMap(major=>{const majorVal=majorCategoryValue(t,major);return [{type:t,value:majorVal,label:categoryDisplay(majorVal)},...subCategoryRows(t,major).map(c=>({type:t,value:c.name,label:categoryDisplay(c.name)}))]})),memories:aiMemories().slice(0,30)};
+        const r=await fetch(AI_FUNCTION_URL,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY,"Authorization":`Bearer ${SUPABASE_ANON_KEY}`},body:JSON.stringify(payload)});
+        if(!r.ok)throw new Error(`AI ${r.status}`); result=await r.json(); result.source="AI";
+      }catch(e){ result=localQuickParse(raw); }
+      quickAnalyzeBtn.disabled=false;quickAnalyzeBtn.textContent="분석"; showQuickPreview(raw,result);
+    }
+    function showQuickPreview(raw,r){
+      const type=normalizeQuickType(r.type), cat=r.category||"", acc=accounts.find(a=>a.id===r.accountId);
+      quickPreview.dataset.raw=raw;quickPreview.dataset.result=JSON.stringify({...r,type});quickPreview.style.display="block";
+      quickPreview.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px"><div><small>날짜</small><br><strong>${escapeHtml(r.date||ymd(new Date()))}</strong></div><div><small>구분</small><br><strong>${type==="income"?"수입":type==="credit_card"?"신용카드":"지출"}</strong></div><div><small>카테고리</small><br><strong>${escapeHtml(categoryDisplay(cat)||"미분류")}</strong></div><div><small>결제수단</small><br><strong>${escapeHtml(acc?.name||"미지정")}</strong></div><div><small>금액</small><br><strong>${money(r.amount)}</strong></div></div><div style="margin-top:8px;color:#6b7280;font-size:12px">분류 방식: ${escapeHtml(r.source||"AI")} · 저장 전 수정 가능</div><div class="modal-actions"><button class="light" onclick="quickPreview.style.display='none'">취소</button><button onclick="applyQuickToForm()">확인·수정</button><button style="background:#059669" onclick="saveQuickDirect()">바로 저장</button></div>`;
+    }
+    function applyQuickToForm(){
+      const r=JSON.parse(quickPreview.dataset.result||"{}"); openEntryModal(r.date||ymd(new Date())); entryType.value=normalizeQuickType(r.type); handleEntryTypeChange(r.category||"",r.accountId||""); entryAmount.value=r.amount||""; entryMemo.value=r.memo||quickPreview.dataset.raw||"";
+      // AI 원문/제안값을 메타로 보존하기 위해 임시 속성 사용
+      entryModal.dataset.aiRaw=quickPreview.dataset.raw||"";entryModal.dataset.aiSuggestedCategory=r.category||"";quickPreview.style.display="none";
+    }
+    async function saveQuickDirect(){
+      const r=JSON.parse(quickPreview.dataset.result||"{}"), raw=quickPreview.dataset.raw||""; if(!r.amount||!r.category){alert("금액 또는 카테고리를 확인할 수 없습니다. '확인·수정'을 눌러 입력해주세요.");return;}
+      const type=normalizeQuickType(r.type),credit=type==="credit_card",payload={entry_date:r.date||ymd(new Date()),type:credit?"expense":type,category:r.category,amount:Number(r.amount),is_fixed:false,memo:packMemo(r.memo||raw,{kind:credit?"credit_card":"entry",accountId:credit?creditAccountId():(r.accountId||activeAccounts()[0]?.id||""),aiRaw:raw,aiSuggestedCategory:r.category,aiSource:r.source||"AI"})};
+      try{if(!db)throw new Error("offline");const{error}=await db.from("moneybook_entries").insert(payload);if(error)throw error;}catch(e){showOffline(e);allEntries.push({...payload,id:uid(),created_at:new Date().toISOString()});cacheData({entries:allEntries});}
+      quickInput.value="";quickPreview.style.display="none";await loadData();
+    }
+    // saveEntry가 확인·수정 흐름의 AI 메타도 저장하도록 memo를 보강
+    const _originalSaveEntry=saveEntry;
+    saveEntry=async function(){
+      if(entryModal.dataset.aiRaw){
+        const raw=entryModal.dataset.aiRaw,suggested=entryModal.dataset.aiSuggestedCategory,chosen=entryCategory.value;
+        if(suggested&&chosen&&suggested!==chosen)rememberAICorrection(raw,chosen,entryType.value);
+        const current=entryMemo.value; entryMemo.value=current; // 실제 메타는 저장 직후 학습기록으로 반영
+        delete entryModal.dataset.aiRaw;delete entryModal.dataset.aiSuggestedCategory;
+      }
+      return _originalSaveEntry();
+    }
+
+    // ---------- 월간 보고서 / CSV / PDF 인쇄 ----------
+    function monthlyReportData(){
+      const spend=entries.filter(e=>isUserSpendEntry(e)), income=entries.filter(e=>e.type==="income"&&!isTransferEntry(e));
+      const incomeTotal=income.reduce((s,e)=>s+Number(e.amount||0),0),expenseTotal=spend.reduce((s,e)=>s+Number(e.amount||0),0);
+      const cat={};spend.forEach(e=>{const k=categoryMajor(e.category)||"미분류";cat[k]=(cat[k]||0)+Number(e.amount||0)});
+      return {income,spend,incomeTotal,expenseTotal,balance:incomeTotal-expenseTotal,cat};
+    }
+    function openMonthlyReport(){
+      const d=monthlyReportData(),{y,m}=monthRange();monthlyReportTitle.textContent=`${y}년 ${m+1}월 가계부 보고서`;
+      const cats=Object.entries(d.cat).sort((a,b)=>b[1]-a[1]);const rows=[...entries].filter(e=>!isTransferEntry(e)).sort((a,b)=>a.entry_date.localeCompare(b.entry_date));
+      monthlyReportBody.innerHTML=`<div class="report-summary"><div class="report-box"><small>총수입</small><strong>${money(d.incomeTotal)}</strong></div><div class="report-box"><small>총지출</small><strong>${money(d.expenseTotal)}</strong></div><div class="report-box"><small>수입-지출</small><strong>${money(d.balance)}</strong></div></div><h3>카테고리별 지출</h3><table class="report-table"><tbody>${cats.map(([k,v])=>`<tr><td>${escapeHtml(k)}</td><td>${money(v)}</td></tr>`).join("")||'<tr><td>지출 없음</td><td>-</td></tr>'}</tbody></table><h3>월간 상세내역</h3><table class="report-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>내용</th><th>금액</th></tr></thead><tbody>${rows.map(e=>`<tr><td>${e.entry_date}</td><td>${e.type==="income"?"수입":"지출"}</td><td>${escapeHtml(categoryDisplay(e.category))}</td><td>${escapeHtml(visibleMemo(e)||"")}</td><td>${money(e.amount)}</td></tr>`).join("")}</tbody></table>`;
+      monthlyReportModal.classList.add("show");
+    }
+    function csvCell(v){return `"${String(v??"").replace(/"/g,'""')}"`;}
+    function downloadMonthlyCSV(){
+      const {y,m}=monthRange(),rows=[["날짜","구분","대분류","소분류","계좌·카드","메모","금액"]];
+      entries.filter(e=>!isTransferEntry(e)).sort((a,b)=>a.entry_date.localeCompare(b.entry_date)).forEach(e=>{const p=splitCategory(e.category);rows.push([e.entry_date,e.type==="income"?"수입":"지출",p.major,p.sub,accountName(entryAccountId(e)),visibleMemo(e),Number(e.amount||0)])});
+      const blob=new Blob(["\ufeff"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`가계부_${y}-${String(m+1).padStart(2,"0")}.csv`;a.click();URL.revokeObjectURL(a.href);
+    }
+    function printMonthlyReport(){
+      const {y,m}=monthRange(),w=window.open("","_blank");w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${y}년 ${m+1}월 가계부</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,'Malgun Gothic',sans-serif;color:#111}h1{font-size:22px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.box{border:1px solid #ccc;padding:10px}.box strong{display:block;font-size:18px;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0 18px}th,td{border-bottom:1px solid #ddd;padding:5px;text-align:left}td:last-child,th:last-child{text-align:right}h2{font-size:15px;margin-top:18px}</style></head><body><h1>${y}년 ${m+1}월 가계부 보고서</h1>${monthlyReportBody.innerHTML.replace(/class="report-summary"/g,'class="summary"').replace(/class="report-box"/g,'class="box"').replace(/class="report-table"/g,'')}</body></html>`);w.document.close();setTimeout(()=>w.print(),250);
+    }
+
   </script>
 </body>
 </html>
