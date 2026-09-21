@@ -139,6 +139,8 @@
     .asset-live-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:17px; border:1px solid #fecaca; background:#fff7f7; border-radius:16px; }
     .asset-live-card small { color:#6b7280; display:block; margin-bottom:4px; }
     .asset-live-card strong { color:#dc2626; font-size:25px; }
+    .credit-breakdown { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:#6b7280; }
+    .credit-breakdown b { color:#111827; margin-left:5px; }
     .asset-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
     .asset-item-card { border:1px solid var(--line); border-radius:16px; padding:15px; background:#fff; }
     .asset-item-card h4 { margin:0; font-size:17px; }
@@ -223,7 +225,7 @@
           </select>
           <small id="accountGroupHint" style="color:#6b7280;display:block;margin-top:6px;">계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.</small>
         </div>
-        <div id="accountPanelActions" class="actions" style="margin:0;"><button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button></div>
+        <div id="accountPanelActions" class="actions" style="margin:0;"><button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button style="background:#dc2626;" onclick="openCardPaymentModal()">카드 상환</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button></div>
       </div>
       <div id="accountList" class="account-list"></div>
       <div id="accountTransferList" class="transfer-list"></div>
@@ -232,6 +234,7 @@
     <div class="actions">
       <button onclick="openEntryModal()">내역 입력</button>
       <button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button>
+      <button style="background:#dc2626;" onclick="openCardPaymentModal()">신용카드 상환</button>
       <button class="secondary" onclick="openCategoryModal()">카테고리 관리</button>
       <button class="secondary" onclick="openChartModal()">카테고리별 지출 원형차트</button>
       <button class="pink" onclick="openHistoryModal()">이력관리</button>
@@ -259,7 +262,7 @@
 
       <section class="asset-section">
         <div class="asset-section-head"><h3>이번 달 카드 현황</h3><small style="color:#6b7280;">가계부의 신용카드 사용 내역과 자동 연결</small></div>
-        <div class="asset-live-card"><div><small>신용카드 총 결제액</small><strong id="assetCreditTotal">0원</strong></div><span id="assetCreditBadge" class="asset-badge green">카드 정리 없음</span></div>
+        <div class="asset-live-card"><div><small>신용카드 총 결제액</small><strong id="assetCreditTotal">0원</strong><div class="credit-breakdown"><span>이번 달 사용<b id="assetCreditUsed">0원</b></span><span>이번 달 상환<b id="assetCreditPaid">0원</b></span></div></div><span id="assetCreditBadge" class="asset-badge green">카드 정리 없음</span></div>
       </section>
 
       <section class="asset-section">
@@ -279,11 +282,11 @@
     <input type="hidden" id="entryId" />
     <div class="form-grid">
       <div><label>날짜</label><input type="date" id="entryDate" /></div>
-      <div><label>구분</label><select id="entryType" onchange="handleEntryTypeChange()"><option value="income">수입</option><option value="expense">지출</option><option value="credit_card">신용카드 사용</option></select></div>
-      <div><label>대분류</label><select id="entryMajorCategory" onchange="renderSubCategorySelect()"></select></div>
-      <div><label>소분류</label><select id="entryCategory"></select></div>
+      <div><label>구분</label><select id="entryType" onchange="handleEntryTypeChange()"><option value="income">수입</option><option value="expense">지출</option><option value="credit_card">신용카드 사용</option><option value="credit_card_payment">신용카드 상환</option></select></div>
+      <div id="entryMajorWrap"><label>대분류</label><select id="entryMajorCategory" onchange="renderSubCategorySelect()"></select></div>
+      <div id="entrySubWrap"><label>소분류</label><select id="entryCategory"></select></div>
       <div><label>금액</label><input type="number" id="entryAmount" placeholder="예: 50000" /></div>
-      <div><label>사용 계좌·카드</label><select id="entryAccount"></select></div>
+      <div><label id="entryAccountLabel">사용 계좌·카드</label><select id="entryAccount"></select></div>
       <div><label>고정비 여부</label><select id="entryFixed"><option value="false">일반 사용금액</option><option value="true">고정비</option></select></div>
       <div class="full"><label>메모</label><textarea id="entryMemo" placeholder="내용을 입력하세요"></textarea></div>
     </div>
@@ -306,6 +309,7 @@
         <option value="expense">지출</option>
         <option value="transfer">이체</option>
         <option value="credit_card">신용카드 사용</option>
+        <option value="credit_card_payment">신용카드 상환</option>
       </select>
     </div>
     <div id="historySummary" class="history-summary"></div>
@@ -604,11 +608,15 @@
     }
 
     function isTransferEntry(e) {
-      return e.type === "expense" && entryCategoryName(e) === "돈옮김" && (entryMeta(e).kind === "transfer" || !entryMeta(e).kind);
+      return isCreditCardPaymentEntry(e) || (e.type === "expense" && entryCategoryName(e) === "돈옮김" && (entryMeta(e).kind === "transfer" || !entryMeta(e).kind));
     }
 
     function isCreditCardEntry(e) {
       return e.type === "expense" && entryMeta(e).kind === "credit_card";
+    }
+
+    function isCreditCardPaymentEntry(e) {
+      return e.type === "expense" && entryMeta(e).kind === "credit_card_payment";
     }
 
     function isSavingEntry(e) {
@@ -633,6 +641,7 @@
     function getEntryTypeLabel(e) {
       if (e.type === "income") return "수입";
       if (isCreditCardEntry(e)) return "신용카드 사용";
+      if (isCreditCardPaymentEntry(e)) return "신용카드 상환";
       if (isFixedEntry(e)) return "고정비";
       if (isSavingEntry(e)) return "적금";
       if (isTransferEntry(e)) return "돈옮김";
@@ -642,6 +651,7 @@
     function getEntryTypeBadgeStyle(e) {
       if (e.type === "income") return "background:#dbeafe; color:#1d4ed8;";
       if (isCreditCardEntry(e)) return "background:#ffedd5; color:#c2410c;";
+      if (isCreditCardPaymentEntry(e)) return "background:#dcfce7; color:#15803d;";
       if (isFixedEntry(e)) return "background:#dbeafe; color:#1d4ed8;";
       if (isSavingEntry(e)) return "background:#dcfce7; color:#15803d;";
       if (isTransferEntry(e)) return "background:#ede9fe; color:#6d28d9;";
@@ -654,6 +664,7 @@
 
     function getEntryRowBgStyle(e) {
       if (e.type === "income") return "background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;";
+      if (isCreditCardPaymentEntry(e)) return "background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;";
       if (isFixedEntry(e)) return "background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;";
       if (isSavingEntry(e)) return "background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;";
       if (isTransferEntry(e)) return "background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;";
@@ -717,16 +728,24 @@
 
     function moveMonth(delta) { currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1); const { start, end } = monthRange(); entries = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end); renderAll(); }
 
-    function openEntryModal(date = null, entry = null) {
+    function openEntryModal(date = null, entry = null, preferredType = "") {
       entryModalTitle.textContent = entry ? "내역 수정" : "내역 입력";
-      entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = entry&&isCreditCardEntry(entry)?"credit_card":entry?.type||"expense"; entryAmount.value = entry?.amount || ""; entryFixed.value = entry?.is_fixed === true ? "true" : "false"; entryMemo.value = entry ? visibleMemo(entry) : "";
-      handleEntryTypeChange(entry?.category||"",entry?entryAccountId(entry):""); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
+      const detectedType=entry&&isCreditCardPaymentEntry(entry)?"credit_card_payment":entry&&isCreditCardEntry(entry)?"credit_card":entry?.type||preferredType||"expense";
+      const meta=entry?entryMeta(entry):{};
+      entryId.value = entry?.id || ""; entryDate.value = entry?.entry_date || date || ymd(new Date()); entryType.value = detectedType; entryAmount.value = entry?.amount || ""; entryFixed.value = entry?.is_fixed === true ? "true" : "false"; entryMemo.value = entry ? visibleMemo(entry) : "";
+      handleEntryTypeChange(entry?.category||"",detectedType==="credit_card_payment"?meta.fromAccountId:(entry?entryAccountId(entry):"")); deleteEntryBtn.style.display = entry ? "inline-block" : "none"; entryModal.classList.add("show");
     }
 
+    function openCardPaymentModal(){ openEntryModal(null,null,"credit_card_payment"); }
+
     function handleEntryTypeChange(selectedCategory="",selectedAccount="") {
-      const credit=entryType.value==="credit_card";
-      if(credit){const id=creditAccountId();entryAccount.innerHTML=`<option value="${id}">신용카드</option>`;entryAccount.value=id;entryAccount.disabled=true;entryFixed.value="false";entryFixed.disabled=true;}
+      const credit=entryType.value==="credit_card",payment=entryType.value==="credit_card_payment";
+      entryMajorWrap.style.display=payment?"none":"block";entrySubWrap.style.display=payment?"none":"block";
+      entryAccountLabel.textContent=payment?"카드값이 출금될 계좌":"사용 계좌·카드";
+      if(payment){const bankAccounts=activeAccounts().filter(a=>accountGroup(a)==="cash"&&!a.fixedCreditCard);entryAccount.disabled=false;entryAccount.innerHTML=bankAccounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");if(selectedAccount&&bankAccounts.some(a=>a.id===selectedAccount))entryAccount.value=selectedAccount;entryFixed.value="false";entryFixed.disabled=true;entryCategory.innerHTML=`<option value="신용카드 상환">신용카드 상환</option>`;}
+      else if(credit){const id=creditAccountId();entryAccount.innerHTML=`<option value="${id}">신용카드</option>`;entryAccount.value=id;entryAccount.disabled=true;entryFixed.value="false";entryFixed.disabled=true;}
       else{entryAccount.disabled=false;entryFixed.disabled=false;entryAccount.innerHTML=accountOptions(selectedAccount||entryAccount.value,true,false);}
+      if(payment)return;
       renderMajorCategorySelect(selectedCategory);
     }
 
@@ -751,8 +770,12 @@
 
     async function saveEntry() {
       const id = entryId.value;
-      const selectedType=entryType.value,credit=selectedType==="credit_card",payload = { entry_date: entryDate.value, type: credit?"expense":selectedType, category: entryCategory.value, amount: Number(entryAmount.value), is_fixed: !credit&&selectedType === "expense" && entryFixed.value === "true", memo: packMemo(entryMemo.value, { kind: credit?"credit_card":"entry", accountId: credit?creditAccountId():entryAccount.value }) };
+      const selectedType=entryType.value,credit=selectedType==="credit_card",payment=selectedType==="credit_card_payment";
+      const payload = payment
+        ? { entry_date:entryDate.value,type:"expense",category:"신용카드 상환",amount:Number(entryAmount.value),is_fixed:false,memo:packMemo(entryMemo.value,{kind:"credit_card_payment",fromAccountId:entryAccount.value,toAccountId:creditAccountId()}) }
+        : { entry_date: entryDate.value, type: credit?"expense":selectedType, category: entryCategory.value, amount: Number(entryAmount.value), is_fixed: !credit&&selectedType === "expense" && entryFixed.value === "true", memo: packMemo(entryMemo.value, credit ? { kind:"credit_card",accountId:creditAccountId(),billingMonth:monthAddKey(String(entryDate.value).slice(0,7),1) } : { kind:"entry",accountId:entryAccount.value }) };
       if (!payload.entry_date || !payload.category || !payload.amount || payload.amount <= 0) { alert("날짜, 카테고리, 금액을 정확히 입력하세요."); return; }
+      if(payment&&!entryAccount.value){alert("카드값이 출금될 계좌를 먼저 추가하거나 선택하세요.");return;}
       try {
       let error; if (id) ({ error } = await db.from("moneybook_entries").update(payload).eq("id", id)); else ({ error } = await db.from("moneybook_entries").insert(payload));
       if (error) throw error;
@@ -761,7 +784,7 @@
       }
       // 빠른입력에서 AI가 제안한 분류를 사용자가 수정했다면 다음 분류에 반영
       const metaBefore = entryId.value ? entryMeta(allEntries.find(e=>String(e.id)===String(entryId.value)) || {}) : {};
-      if (metaBefore?.aiRaw && metaBefore?.aiSuggestedCategory && metaBefore.aiSuggestedCategory !== payload.category) rememberAICorrection(metaBefore.aiRaw, payload.category, selectedType);
+      if (!payment&&metaBefore?.aiRaw && metaBefore?.aiSuggestedCategory && metaBefore.aiSuggestedCategory !== payload.category) rememberAICorrection(metaBefore.aiRaw, payload.category, selectedType);
       closeModal("entryModal"); await loadData();
     }
 
@@ -773,7 +796,7 @@
 
     function openDayModal(dateStr) {
       selectedDate = dateStr; const dayEntries = entries.filter(e => e.entry_date === dateStr); dayModalTitle.textContent = `${dateStr} 내역`;
-      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row" style="${getEntryRowBgStyle(e)}"><span>${entryTypeBadge(e)}</span><strong>${escapeHtml(categoryDisplay(e.category))}</strong><span>${escapeHtml(isTransferEntry(e) ? `${accountName(entryMeta(e).fromAccountId)} → ${accountName(entryMeta(e).toAccountId)}` : accountName(entryAccountId(e)))}<br><small>${escapeHtml(visibleMemo(e) || "-")}</small></span><strong>${money(e.amount)}</strong><button class="light" onclick='${isTransferEntry(e) ? "editTransfer" : "editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
+      dayEntryList.innerHTML = dayEntries.length ? dayEntries.map(e => `<div class="entry-row" style="${getEntryRowBgStyle(e)}"><span>${entryTypeBadge(e)}</span><strong>${escapeHtml(categoryDisplay(e.category))}</strong><span>${escapeHtml(isTransferEntry(e) ? `${accountName(entryMeta(e).fromAccountId)} → ${accountName(entryMeta(e).toAccountId)}` : accountName(entryAccountId(e)))}<br><small>${escapeHtml(visibleMemo(e) || "-")}</small></span><strong>${money(e.amount)}</strong><button class="light" onclick='${isTransferEntry(e)&&!isCreditCardPaymentEntry(e) ? "editTransfer" : "editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></div>`).join("") : `<p style="color:#6b7280;">저장된 내역이 없습니다.</p>`;
       dayModal.classList.add("show");
     }
     function editEntry(entry) { closeModal("dayModal"); closeModal("historyModal"); openEntryModal(null, entry); }
@@ -805,12 +828,11 @@
       }
       const active = visibleGroupAccounts();
       accountGroupHint.textContent = "계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.";
-      accountPanelActions.innerHTML = `<button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button>`;
+      accountPanelActions.innerHTML = `<button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button style="background:#dc2626;" onclick="openCardPaymentModal()">카드 상환</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button>`;
       if (selectedAccountId !== "all" && !active.some(a => a.id === selectedAccountId)) selectedAccountId = "all";
-      const total = active.reduce((sum, a) => sum + accountBalance(a.id), 0);
-      const totalLabel = "전체 계좌·카드";
-      accountList.innerHTML = `<button class="account-box ${selectedAccountId === "all" ? "active" : ""}" onclick="selectAccount('all')"><small>${totalLabel}</small><strong class="${total < 0 ? "expense" : "balance"}">${money(total)}</strong></button>` + active.map(a => {
+      accountList.innerHTML = active.map(a => {
         const value = accountBalance(a.id);
+        if(a.fixedCreditCard){const due=Math.max(0,-value),advance=Math.max(0,value);return `<button class="account-box ${selectedAccountId === a.id ? "active" : ""}" onclick="selectAccount('${a.id}')"><small>${escapeHtml(a.name)} · ${advance>0?"선결제 잔액":"결제 예정액"}</small><strong class="${due>0?"expense":"balance"}">${money(due>0?due:advance)}</strong></button>`;}
         return `<button class="account-box ${selectedAccountId === a.id ? "active" : ""}" onclick="selectAccount('${a.id}')"><small>${escapeHtml(a.name)}</small><strong class="${value < 0 ? "expense" : "balance"}">${money(value)}</strong></button>`;
       }).join("");
       renderAccountTransfers();
@@ -828,16 +850,16 @@
         .sort((a,b) => a.entry_date === b.entry_date ? String(b.created_at||"").localeCompare(String(a.created_at||"")) : b.entry_date.localeCompare(a.entry_date));
       if (selectedAccountId !== "all") list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? m.fromAccountId === selectedAccountId || m.toAccountId === selectedAccountId : m.accountId === selectedAccountId; });
       else { const ids = new Set(visibleGroupAccounts().map(a=>a.id)); list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? ids.has(m.fromAccountId) || ids.has(m.toAccountId) : ids.has(m.accountId); }); }
-      const title = selectedAccountId === "all" ? "이번 달 전체 계좌·카드 내역" : `${accountName(selectedAccountId)} 이번 달 내역`;
+      const title = selectedAccountId === "all" ? "이번 달 계좌·카드 내역" : `${accountName(selectedAccountId)} 이번 달 내역`;
       const toggle=`<button class="activity-toggle" onclick="toggleAccountActivity()"><span>${escapeHtml(title)} <small style="color:#6b7280;">(${list.length}건)</small></span><strong>${accountActivityExpanded?"▲ 접기":"▼ 내역 보기"}</strong></button>`;
       if(!accountActivityExpanded){accountTransferList.innerHTML=toggle;return;}
       const rows=list.length?list.map(e=>{
         const m=entryMeta(e),transfer=isTransferEntry(e);
-        const detail=transfer?`<strong>${escapeHtml(accountName(m.fromAccountId))}</strong> → <strong>${escapeHtml(accountName(m.toAccountId))}</strong>`:`${entryTypeBadge(e)} <strong>${escapeHtml(categoryDisplay(e.category))}</strong><br><small>${escapeHtml(accountName(m.accountId))}</small>`;
+        const detail=transfer?`${isCreditCardPaymentEntry(e)?entryTypeBadge(e)+" ":""}<strong>${escapeHtml(accountName(m.fromAccountId))}</strong> → <strong>${escapeHtml(accountName(m.toAccountId))}</strong>`:`${entryTypeBadge(e)} <strong>${escapeHtml(categoryDisplay(e.category))}</strong><br><small>${escapeHtml(accountName(m.accountId))}</small>`;
         let amountText=money(e.amount),amountStyle="color:#7c3aed;";
         if(!transfer){const income=e.type==="income";amountText=`${income?"+":"-"}${money(e.amount)}`;amountStyle=income?"color:#2563eb;":"color:#dc2626;";}
         else if(selectedAccountId!=="all"){const incoming=m.toAccountId===selectedAccountId;amountText=`${incoming?"+":"-"}${money(e.amount)}`;amountStyle=incoming?"color:#2563eb;":"color:#dc2626;";}
-        return `<div class="transfer-row"><span>${e.entry_date}</span><span>${detail}<br><small>${escapeHtml(visibleMemo(e)||"-")}</small></span><strong style="${amountStyle}">${amountText}</strong><button class="light" onclick='${transfer?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g,"&#39;")})'>수정</button></div>`;
+        return `<div class="transfer-row"><span>${e.entry_date}</span><span>${detail}<br><small>${escapeHtml(visibleMemo(e)||"-")}</small></span><strong style="${amountStyle}">${amountText}</strong><button class="light" onclick='${transfer&&!isCreditCardPaymentEntry(e)?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g,"&#39;")})'>수정</button></div>`;
       }).join(""):`<p style="color:#6b7280;text-align:center;">저장된 내역이 없습니다.</p>`;
       accountTransferList.innerHTML=toggle+`<div class="activity-list-box">${rows}</div>`;
     }
@@ -880,13 +902,13 @@
     function renderHistoryList() {
       const keyword = historySearch.value.trim().toLowerCase(); const type = historyTypeFilter.value;
       let list = [...entries].sort((a,b) => (a.entry_date < b.entry_date ? 1 : -1));
-      if (type !== "all") list = list.filter(e => type === "transfer" ? isTransferEntry(e) : type === "credit_card" ? isCreditCardEntry(e) : e.type === type && !isTransferEntry(e) && !(type==="expense"&&isCreditCardEntry(e)));
+      if (type !== "all") list = list.filter(e => type === "transfer" ? isTransferEntry(e)&&!isCreditCardPaymentEntry(e) : type === "credit_card" ? isCreditCardEntry(e) : type === "credit_card_payment" ? isCreditCardPaymentEntry(e) : e.type === type && !isTransferEntry(e) && !(type==="expense"&&isCreditCardEntry(e)));
       if (keyword) list = list.filter(e => { const m=entryMeta(e), accountText=isTransferEntry(e)?`${accountName(m.fromAccountId)} ${accountName(m.toAccountId)}`:accountName(m.accountId); return `${e.category} ${visibleMemo(e)} ${accountText}`.toLowerCase().includes(keyword); });
       const income = list.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount),0);
       const spendExpense = list.filter(e=>isUserSpendEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       const balanceExpense = list.filter(e=>e.type==="expense"&&!isTransferEntry(e)).reduce((s,e)=>s+Number(e.amount),0);
       historySummary.innerHTML = `<span>검색결과 ${list.length}건</span><span class="income">수입 ${money(income)}</span><span class="expense">사용금액 ${money(spendExpense)}</span><span class="balance">잔액 ${money(income-balanceExpense)}</span>`;
-      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>계좌·카드</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => { const m=entryMeta(e), accountText=isTransferEntry(e)?`${accountName(m.fromAccountId)} → ${accountName(m.toAccountId)}`:accountName(m.accountId); return `<tr><td>${e.entry_date}</td><td>${entryTypeBadge(e)}</td><td>${escapeHtml(categoryDisplay(e.category))}</td><td>${escapeHtml(accountText)}</td><td>${escapeHtml(visibleMemo(e) || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='${isTransferEntry(e)?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`; }).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
+      historyList.innerHTML = list.length ? `<table class="history-table"><thead><tr><th>날짜</th><th>구분</th><th>카테고리</th><th>계좌·카드</th><th>메모</th><th>금액</th><th>관리</th></tr></thead><tbody>${list.map(e => { const m=entryMeta(e), accountText=isTransferEntry(e)?`${accountName(m.fromAccountId)} → ${accountName(m.toAccountId)}`:accountName(m.accountId); return `<tr><td>${e.entry_date}</td><td>${entryTypeBadge(e)}</td><td>${escapeHtml(categoryDisplay(e.category))}</td><td>${escapeHtml(accountText)}</td><td>${escapeHtml(visibleMemo(e) || "-")}</td><td><strong>${money(e.amount)}</strong></td><td><button class="light" onclick='${isTransferEntry(e)&&!isCreditCardPaymentEntry(e)?"editTransfer":"editEntry"}(${JSON.stringify(e).replace(/'/g, "&#39;")})'>수정</button></td></tr>`; }).join("")}</tbody></table>` : `<p style="color:#6b7280; text-align:center; padding:20px;">검색 결과가 없습니다.</p>`;
     }
 
     function openCategoryModal() { renderCategoryManager(); categoryModal.classList.add("show"); }
@@ -1195,7 +1217,13 @@
       return index===months-1?Math.max(0,total-monthly*(months-1)):Math.min(monthly,Math.max(0,total-monthly*index));
     }
     function activeDebtsForMonth(key){ return assetDebts.filter(d=>debtStartMonth(d)<=key&&debtEndMonth(d)>=key); }
-    function creditCardTotalForMonth(key){ return allEntries.filter(e=>String(e.entry_date||"").slice(0,7)===key&&isCreditCardEntry(e)).reduce((s,e)=>s+Number(e.amount||0),0); }
+    function creditCardOutstanding(){ const card=activeAccounts().find(a=>a.fixedCreditCard)||ensureCreditAccount(); return Math.max(0,-accountBalance(card.id)); }
+    function creditCardTotalForMonth(key){
+      const cardId=creditAccountId();
+      const due=allEntries.filter(isCreditCardEntry).filter(e=>{const usedMonth=String(e.entry_date||"").slice(0,7),billingMonth=entryMeta(e).billingMonth||monthAddKey(usedMonth,1);return billingMonth<=key;}).reduce((s,e)=>s+Number(e.amount||0),0);
+      const paid=allEntries.filter(e=>isTransferEntry(e)&&entryMeta(e).toAccountId===cardId&&String(e.entry_date||"").slice(0,7)<=key).reduce((s,e)=>s+Number(e.amount||0),0);
+      return Math.max(0,due-paid);
+    }
     function liveBankBalance(){ return activeAccounts().filter(a=>accountGroup(a)==="cash"&&!a.fixedCreditCard).reduce((s,a)=>s+accountBalance(a.id),0); }
     function assetPlanCalculation(plan){
       const month=plan?.month||currentMonthKey(),itemsTotal=(plan?.items||[]).reduce((s,i)=>s+Number(i.amount||0),0);
@@ -1229,12 +1257,15 @@
     }
     function renderAssetProject(){
       if(typeof assetBankBalance==="undefined")return;
-      const month=currentMonthKey(),active=assetDebts.filter(d=>debtEndMonth(d)>=month),plan=assetPlans.find(p=>p.month===month),calc=plan?assetPlanCalculation(plan):null,card=creditCardTotalForMonth(month);
+      const month=currentMonthKey(),active=assetDebts.filter(d=>debtEndMonth(d)>=month),plan=assetPlans.find(p=>p.month===month),calc=plan?assetPlanCalculation(plan):null,card=creditCardOutstanding();
+      const monthCardEntries=allEntries.filter(e=>String(e.entry_date||"").slice(0,7)===month),monthUsed=monthCardEntries.filter(isCreditCardEntry).reduce((s,e)=>s+Number(e.amount||0),0),monthPaid=monthCardEntries.filter(isCreditCardPaymentEntry).reduce((s,e)=>s+Number(e.amount||0),0);
       assetBankBalance.textContent=money(liveBankBalance());
       assetDebtCount.textContent=`${active.length}건`;
       assetExpectedSaving.textContent=calc?money(calc.saving):"계획 미등록";
       assetExpectedSaving.style.color=calc&&calc.saving<0?"#fecaca":"white";
       assetCreditTotal.textContent=money(card);
+      assetCreditUsed.textContent=money(monthUsed);
+      assetCreditPaid.textContent=money(monthPaid);
       assetCreditBadge.textContent=card>0?"카드 정리 필요":"카드 정리 없음";
       assetCreditBadge.className=`asset-badge ${card>0?"red":"green"}`;
       assetDebtList.innerHTML=assetDebts.length?assetDebts.map(debtCardHtml).join(""):`<div class="asset-empty" style="grid-column:1/-1;">상환 예정 금액 없음</div>`;
