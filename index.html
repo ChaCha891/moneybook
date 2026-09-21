@@ -393,13 +393,15 @@
     <input type="hidden" id="assetDebtId" />
     <div class="form-grid">
       <div><label>상환 항목명</label><input id="assetDebtName" placeholder="예: 엄마에게 빌린 돈, 자동차 할부" /></div>
-      <div><label>상환 시작일</label><input type="date" id="assetDebtStartDate" /></div>
-      <div><label>빌린 금액</label><input type="number" id="assetDebtPrincipal" min="0" placeholder="예: 5000000" /></div>
-      <div><label>상환 기간</label><input type="number" id="assetDebtMonths" min="1" placeholder="예: 6" /><small style="color:#6b7280;">개월 단위로 입력</small></div>
-      <div><label>매월 납부할 금액</label><input type="number" id="assetDebtMonthly" min="0" placeholder="비워두면 자동 계산" /></div>
-      <div><label>총 이자·수수료</label><input type="number" id="assetDebtInterest" min="0" value="0" placeholder="이자가 없으면 0" /></div>
+      <div><label>남은 상환 시작일</label><input type="date" id="assetDebtStartDate" oninput="recalculateDebtFields()" /><small style="color:#6b7280;">다음 납부 예정일을 입력</small></div>
+      <div><label>빌린 금액</label><input type="number" id="assetDebtPrincipal" min="0" placeholder="예: 5000000" oninput="recalculateDebtFields()" /></div>
+      <div><label>현재까지 갚은 금액</label><input type="number" id="assetDebtPaid" min="0" value="0" placeholder="예: 4200000" oninput="recalculateDebtFields()" /></div>
+      <div><label>총 이자·수수료</label><input type="number" id="assetDebtInterest" min="0" value="0" placeholder="이자가 없으면 0" oninput="recalculateDebtFields()" /></div>
+      <div><label>남은 상환 기간</label><input type="number" id="assetDebtMonths" min="1" placeholder="예: 6" oninput="recalculateDebtFields('months')" /><small style="color:#6b7280;">입력하면 월 납부액 자동 계산</small></div>
+      <div><label>매월 납부할 금액</label><input type="number" id="assetDebtMonthly" min="0" placeholder="예: 100000" oninput="recalculateDebtFields('monthly')" /><small style="color:#6b7280;">입력하면 남은 개월 수 자동 계산</small></div>
       <div class="full"><label>메모</label><textarea id="assetDebtMemo" placeholder="상환 방법이나 특이사항을 적어두세요."></textarea></div>
     </div>
+    <div id="assetDebtPreview" class="plan-total"><span>남은 상환금과 예상 완납일</span><strong>-</strong></div>
     <div class="modal-actions"><button class="danger" id="deleteAssetDebtBtn" onclick="deleteAssetDebt()" style="display:none;">삭제</button><button class="light" onclick="closeModal('assetDebtModal')">닫기</button><button onclick="saveAssetDebt()">저장</button></div>
   </div></div>
 
@@ -410,7 +412,7 @@
       <div><label>계획 월</label><input type="month" id="assetPlanMonth" /></div>
       <div><label>예상 수입</label><input type="number" id="assetPlanIncome" min="0" placeholder="예: 3496800" /></div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;"><div><strong>빠져나갈 항목</strong><div style="font-size:12px;color:#6b7280;margin-top:3px;">카드값과 등록된 상환금은 자동으로 합산됩니다.</div></div><button class="light" onclick="addAssetPlanItemRow()">+ 항목 추가</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;"><div><strong>빠져나갈 항목</strong><div style="font-size:12px;color:#6b7280;margin-top:3px;">등록된 고정비·카드값·상환금은 자동으로 합산됩니다.</div></div><button class="light" onclick="addAssetPlanItemRow()">+ 항목 추가</button></div>
     <div id="assetPlanItems"></div>
     <div class="plan-total"><span>직접 입력한 지출 합계</span><strong id="assetPlanItemsTotal">0원</strong></div>
     <div class="modal-actions"><button class="danger" id="deleteAssetPlanBtn" onclick="deleteAssetPlan()" style="display:none;">삭제</button><button class="light" onclick="closeModal('assetPlanModal')">닫기</button><button onclick="saveAssetPlan()">저장</button></div>
@@ -933,7 +935,7 @@
     function refreshCategoryViews(){renderCategoryManager();renderMajorCategorySelect();renderSummary();if(typeof fixedItemCategory!=="undefined")renderFixedCategorySelect();}
 
     async function loadFixedItems() {
-      if (!cloudOnline || !db) { fixedItems = cachedData().fixedItems || fixedItems || []; return; }
+      if (!cloudOnline || !db) { fixedItems = cachedData().fixedItems || fixedItems || []; renderAssetProject(); return; }
       try {
         const { data, error } = await db.from("moneybook_fixed_items").select("*").order("transfer_day", { ascending: true }).order("created_at", { ascending: true });
         if (error) throw error;
@@ -941,6 +943,7 @@
       } catch (error) {
         showOffline(error); fixedItems = cachedData().fixedItems || [];
       }
+      renderAssetProject();
     }
 
     function openFixedManageModal() {
@@ -1207,16 +1210,19 @@
     function monthAddKey(key,delta){ const [y,m]=String(key).split("-").map(Number),d=new Date(y,m-1+delta,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
     function monthText(key){ if(!key)return "-"; const [y,m]=String(key).split("-"); return `${y}년 ${Number(m)}월`; }
     function monthIndexBetween(from,to){ const [fy,fm]=String(from).split("-").map(Number),[ty,tm]=String(to).split("-").map(Number); return (ty-fy)*12+(tm-fm); }
+    let assetDebtCalcMode="months";
+    function debtTotalAmount(debt){ return Number(debt.principal||0)+Number(debt.interest||0); }
+    function debtRemainingAmount(debt){ return Math.max(0,debtTotalAmount(debt)-Number(debt.paid||0)); }
     function debtStartMonth(debt){ return String(debt.startDate||currentMonthKey()).slice(0,7); }
-    function debtEndMonth(debt){ return monthAddKey(debtStartMonth(debt),Math.max(1,Number(debt.months)||1)-1); }
-    function debtMonthlyAmount(debt){ const months=Math.max(1,Number(debt.months)||1),total=Number(debt.principal||0)+Number(debt.interest||0); return Number(debt.monthly||0)>0?Number(debt.monthly):Math.ceil(total/months); }
+    function debtEndMonth(debt){ const remaining=debtRemainingAmount(debt);if(remaining<=0)return "";return monthAddKey(debtStartMonth(debt),Math.max(1,Number(debt.months)||1)-1); }
+    function debtMonthlyAmount(debt){ const months=Math.max(1,Number(debt.months)||1),remaining=debtRemainingAmount(debt);if(remaining<=0)return 0;return Number(debt.monthly||0)>0?Number(debt.monthly):Math.ceil(remaining/months); }
     function debtPaymentForMonth(debt,key){
       const index=monthIndexBetween(debtStartMonth(debt),key),months=Math.max(1,Number(debt.months)||1);
-      if(index<0||index>=months)return 0;
-      const total=Number(debt.principal||0)+Number(debt.interest||0),monthly=debtMonthlyAmount(debt);
-      return index===months-1?Math.max(0,total-monthly*(months-1)):Math.min(monthly,Math.max(0,total-monthly*index));
+      const remaining=debtRemainingAmount(debt);if(remaining<=0||index<0||index>=months)return 0;
+      const monthly=debtMonthlyAmount(debt);
+      return index===months-1?Math.max(0,remaining-monthly*(months-1)):Math.min(monthly,Math.max(0,remaining-monthly*index));
     }
-    function activeDebtsForMonth(key){ return assetDebts.filter(d=>debtStartMonth(d)<=key&&debtEndMonth(d)>=key); }
+    function activeDebtsForMonth(key){ return assetDebts.filter(d=>debtRemainingAmount(d)>0&&debtStartMonth(d)<=key&&debtEndMonth(d)>=key); }
     function creditCardOutstanding(){ const card=activeAccounts().find(a=>a.fixedCreditCard)||ensureCreditAccount(); return Math.max(0,-accountBalance(card.id)); }
     function creditCardTotalForMonth(key){
       const cardId=creditAccountId();
@@ -1226,9 +1232,11 @@
     }
     function liveBankBalance(){ return activeAccounts().filter(a=>accountGroup(a)==="cash"&&!a.fixedCreditCard).reduce((s,a)=>s+accountBalance(a.id),0); }
     function assetPlanCalculation(plan){
-      const month=plan?.month||currentMonthKey(),itemsTotal=(plan?.items||[]).reduce((s,i)=>s+Number(i.amount||0),0);
+      const month=plan?.month||currentMonthKey(),fixedTotal=fixedItems.reduce((s,i)=>s+Number(i.amount||0),0);
+      const countedItems=(plan?.items||[]).filter(i=>!(fixedTotal>0&&["고정비","월고정비"].includes(String(i.name||"").replace(/\s/g,""))));
+      const itemsTotal=countedItems.reduce((s,i)=>s+Number(i.amount||0),0);
       const cardTotal=creditCardTotalForMonth(month),debtTotal=activeDebtsForMonth(month).reduce((s,d)=>s+debtPaymentForMonth(d,month),0),income=Number(plan?.income||0);
-      return {month,itemsTotal,cardTotal,debtTotal,income,saving:income-itemsTotal-cardTotal-debtTotal};
+      return {month,itemsTotal,fixedTotal,cardTotal,debtTotal,income,countedItems,saving:income-itemsTotal-fixedTotal-cardTotal-debtTotal};
     }
     function toggleMainView(){
       mainView=mainView==="ledger"?"asset":"ledger";
@@ -1241,8 +1249,9 @@
       window.scrollTo({top:0,behavior:"smooth"});
     }
     function debtCardHtml(debt){
-      const end=debtEndMonth(debt),monthly=debtMonthlyAmount(debt),total=Number(debt.principal||0)+Number(debt.interest||0);
-      return `<article class="asset-item-card"><div class="asset-item-head"><div><h4>${escapeHtml(debt.name||"이름 없는 상환")}</h4><div class="asset-badges"><span class="asset-badge orange">${monthText(end)} 완납</span></div></div><button class="light" onclick="openAssetDebtModal('${debt.id}')">수정</button></div><div style="margin-top:10px"><div class="asset-kv"><span>빌린 금액</span><strong>${money(debt.principal)}</strong></div><div class="asset-kv"><span>상환 기간</span><strong>${Number(debt.months)||1}개월</strong></div><div class="asset-kv"><span>매월 납부 예정</span><strong>${money(monthly)}</strong></div><div class="asset-kv"><span>이자·수수료</span><strong>${money(debt.interest)}</strong></div><div class="asset-kv"><span>총 상환 예정액</span><strong>${money(total)}</strong></div></div>${debt.memo?`<p style="font-size:12px;color:#6b7280;margin:10px 0 0;">${escapeHtml(debt.memo)}</p>`:""}</article>`;
+      const remaining=debtRemainingAmount(debt),end=debtEndMonth(debt),monthly=debtMonthlyAmount(debt),total=debtTotalAmount(debt);
+      const status=remaining<=0?`<span class="asset-badge green">상환 완료</span>`:`<span class="asset-badge orange">${monthText(end)} 완납</span>`;
+      return `<article class="asset-item-card"><div class="asset-item-head"><div><h4>${escapeHtml(debt.name||"이름 없는 상환")}</h4><div class="asset-badges">${status}</div></div><button class="light" onclick="openAssetDebtModal('${debt.id}')">수정</button></div><div style="margin-top:10px"><div class="asset-kv"><span>빌린 금액</span><strong>${money(debt.principal)}</strong></div><div class="asset-kv"><span>현재까지 갚은 금액</span><strong>${money(debt.paid)}</strong></div><div class="asset-kv"><span>남은 상환금</span><strong>${money(remaining)}</strong></div><div class="asset-kv"><span>남은 상환 기간</span><strong>${remaining>0?`${Number(debt.months)||1}개월`:"완료"}</strong></div><div class="asset-kv"><span>매월 납부 예정</span><strong>${money(monthly)}</strong></div><div class="asset-kv"><span>이자·수수료</span><strong>${money(debt.interest)}</strong></div><div class="asset-kv"><span>총 상환 예정액</span><strong>${money(total)}</strong></div></div>${debt.memo?`<p style="font-size:12px;color:#6b7280;margin:10px 0 0;">${escapeHtml(debt.memo)}</p>`:""}</article>`;
     }
     function planBadges(calc){
       const badges=[];
@@ -1252,12 +1261,12 @@
       return badges.join("");
     }
     function planCardHtml(plan){
-      const c=assetPlanCalculation(plan),items=(plan.items||[]).map(i=>`<div class="asset-kv"><span>${escapeHtml(i.name||"지출")}</span><strong>${money(i.amount)}</strong></div>`).join("");
-      return `<article class="asset-item-card"><div class="asset-item-head"><div><h4>${monthText(plan.month)}</h4><div class="asset-badges">${planBadges(c)}</div></div><button class="light" onclick="openAssetPlanModal('${plan.id}')">수정</button></div><div style="margin-top:10px"><div class="asset-kv"><span>예상 수입</span><strong class="income">${money(c.income)}</strong></div>${items}<div class="asset-kv"><span>신용카드 자동반영</span><strong>${money(c.cardTotal)}</strong></div><div class="asset-kv"><span>상환금 자동반영</span><strong>${money(c.debtTotal)}</strong></div><div class="asset-kv"><span>예상 저축</span><strong class="${c.saving<0?"expense":"balance"}">${money(c.saving)}</strong></div></div></article>`;
+      const c=assetPlanCalculation(plan),items=c.countedItems.map(i=>`<div class="asset-kv"><span>${escapeHtml(i.name||"지출")}</span><strong>${money(i.amount)}</strong></div>`).join("");
+      return `<article class="asset-item-card"><div class="asset-item-head"><div><h4>${monthText(plan.month)}</h4><div class="asset-badges">${planBadges(c)}</div></div><button class="light" onclick="openAssetPlanModal('${plan.id}')">수정</button></div><div style="margin-top:10px"><div class="asset-kv"><span>예상 수입</span><strong class="income">${money(c.income)}</strong></div><div class="asset-kv"><span>고정비 자동반영</span><strong>${money(c.fixedTotal)}</strong></div>${items}<div class="asset-kv"><span>신용카드 자동반영</span><strong>${money(c.cardTotal)}</strong></div><div class="asset-kv"><span>상환금 자동반영</span><strong>${money(c.debtTotal)}</strong></div><div class="asset-kv"><span>예상 저축</span><strong class="${c.saving<0?"expense":"balance"}">${money(c.saving)}</strong></div></div></article>`;
     }
     function renderAssetProject(){
       if(typeof assetBankBalance==="undefined")return;
-      const month=currentMonthKey(),active=assetDebts.filter(d=>debtEndMonth(d)>=month),plan=assetPlans.find(p=>p.month===month),calc=plan?assetPlanCalculation(plan):null,card=creditCardOutstanding();
+      const month=currentMonthKey(),active=assetDebts.filter(d=>debtRemainingAmount(d)>0&&debtEndMonth(d)>=month),plan=assetPlans.find(p=>p.month===month),calc=plan?assetPlanCalculation(plan):null,card=creditCardOutstanding();
       const monthCardEntries=allEntries.filter(e=>String(e.entry_date||"").slice(0,7)===month),monthUsed=monthCardEntries.filter(isCreditCardEntry).reduce((s,e)=>s+Number(e.amount||0),0),monthPaid=monthCardEntries.filter(isCreditCardPaymentEntry).reduce((s,e)=>s+Number(e.amount||0),0);
       assetBankBalance.textContent=money(liveBankBalance());
       assetDebtCount.textContent=`${active.length}건`;
@@ -1275,13 +1284,27 @@
     function openAssetDebtModal(id=""){
       const debt=assetDebts.find(d=>String(d.id)===String(id));
       assetDebtModalTitle.textContent=debt?"상환항목 수정":"상환항목 추가";
-      assetDebtId.value=debt?.id||""; assetDebtName.value=debt?.name||""; assetDebtStartDate.value=debt?.startDate||ymd(new Date()); assetDebtPrincipal.value=debt?.principal||""; assetDebtMonths.value=debt?.months||""; assetDebtMonthly.value=debt?.monthly||""; assetDebtInterest.value=debt?.interest||0; assetDebtMemo.value=debt?.memo||"";
+      assetDebtId.value=debt?.id||""; assetDebtName.value=debt?.name||""; assetDebtStartDate.value=debt?.startDate||ymd(new Date()); assetDebtPrincipal.value=debt?.principal||""; assetDebtPaid.value=debt?.paid||0; assetDebtMonths.value=debt?.months||""; assetDebtMonthly.value=debt?.monthly||""; assetDebtInterest.value=debt?.interest||0; assetDebtMemo.value=debt?.memo||"";
+      assetDebtCalcMode=debt?.calcMode||(Number(debt?.monthly)>0?"monthly":"months");recalculateDebtFields();
       deleteAssetDebtBtn.style.display=debt?"inline-block":"none"; assetDebtModal.classList.add("show");
     }
+    function recalculateDebtFields(mode=""){
+      if(mode)assetDebtCalcMode=mode;
+      const principal=Math.max(0,Number(assetDebtPrincipal.value)||0),interest=Math.max(0,Number(assetDebtInterest.value)||0),paid=Math.max(0,Number(assetDebtPaid.value)||0),remaining=Math.max(0,principal+interest-paid);
+      let months=Math.max(0,Math.ceil(Number(assetDebtMonths.value)||0)),monthly=Math.max(0,Math.ceil(Number(assetDebtMonthly.value)||0));
+      if(remaining<=0){months=0;monthly=0;assetDebtMonths.value="";assetDebtMonthly.value="";assetDebtPreview.innerHTML=`<span>남은 상환금</span><strong>상환 완료</strong>`;return;}
+      if(assetDebtCalcMode==="monthly"&&monthly>0){months=Math.ceil(remaining/monthly);assetDebtMonths.value=months;}
+      else if(assetDebtCalcMode==="months"&&months>0){monthly=Math.ceil(remaining/months);assetDebtMonthly.value=monthly;}
+      const start=String(assetDebtStartDate.value||"").slice(0,7),end=start&&months>0?monthAddKey(start,months-1):"";
+      assetDebtPreview.innerHTML=`<span>남은 상환금 ${money(remaining)}</span><strong>${months>0?`${months}개월 · ${monthText(end)} 완납`:"기간 또는 월 납부액을 입력하세요"}</strong>`;
+    }
     function saveAssetDebt(){
-      const id=assetDebtId.value,name=assetDebtName.value.trim(),startDate=assetDebtStartDate.value,principal=Number(assetDebtPrincipal.value),months=Math.max(1,Number(assetDebtMonths.value)||0),monthly=Number(assetDebtMonthly.value||0),interest=Number(assetDebtInterest.value||0),memo=assetDebtMemo.value.trim();
-      if(!name||!startDate||principal<=0||!Number(assetDebtMonths.value)){alert("상환 항목명, 시작일, 빌린 금액, 상환 기간을 확인하세요.");return;}
-      const value={id:id||uid(),name,startDate,principal,months,monthly,interest,memo};
+      recalculateDebtFields();
+      const id=assetDebtId.value,name=assetDebtName.value.trim(),startDate=assetDebtStartDate.value,principal=Number(assetDebtPrincipal.value),interest=Math.max(0,Number(assetDebtInterest.value)||0),paid=Math.max(0,Number(assetDebtPaid.value)||0),months=Math.max(0,Number(assetDebtMonths.value)||0),monthly=Math.max(0,Number(assetDebtMonthly.value)||0),memo=assetDebtMemo.value.trim(),remaining=principal+interest-paid;
+      if(!name||!startDate||principal<=0){alert("상환 항목명, 시작일, 빌린 금액을 확인하세요.");return;}
+      if(paid>principal+interest){alert("현재까지 갚은 금액은 총 상환 예정액보다 클 수 없습니다.");return;}
+      if(remaining>0&&(!months||!monthly)){alert("남은 상환 기간 또는 매월 납부할 금액을 입력하세요.");return;}
+      const value={id:id||uid(),name,startDate,principal,paid,months,monthly,interest,calcMode:assetDebtCalcMode,memo};
       if(id){const index=assetDebts.findIndex(d=>String(d.id)===String(id));if(index>=0)assetDebts[index]=value;}else assetDebts.push(value);
       closeModal("assetDebtModal");persistAssetProject();
     }
@@ -1293,7 +1316,7 @@
       const items=plan?.items?.length?plan.items:[{id:uid(),name:"",amount:""}];items.forEach(addAssetPlanItemRow);updateAssetPlanItemsTotal();assetPlanModal.classList.add("show");
     }
     function addAssetPlanItemRow(item={}){
-      const row=document.createElement("div");row.className="plan-item-row";row.dataset.id=item.id||uid();row.innerHTML=`<div><label>항목명</label><input class="plan-item-name" value="${escapeHtml(item.name||"")}" placeholder="예: 고정비, 학원비, 생활비" /></div><div><label>금액</label><input class="plan-item-amount" type="number" min="0" value="${Number(item.amount)||""}" placeholder="0" /></div><button class="danger" type="button">삭제</button>`;row.querySelector("button").onclick=()=>{row.remove();updateAssetPlanItemsTotal()};row.querySelector(".plan-item-amount").oninput=updateAssetPlanItemsTotal;assetPlanItems.appendChild(row);
+      const row=document.createElement("div");row.className="plan-item-row";row.dataset.id=item.id||uid();row.innerHTML=`<div><label>항목명</label><input class="plan-item-name" value="${escapeHtml(item.name||"")}" placeholder="예: 학원비, 생활비, 여가비" /></div><div><label>금액</label><input class="plan-item-amount" type="number" min="0" value="${Number(item.amount)||""}" placeholder="0" /></div><button class="danger" type="button">삭제</button>`;row.querySelector("button").onclick=()=>{row.remove();updateAssetPlanItemsTotal()};row.querySelector(".plan-item-amount").oninput=updateAssetPlanItemsTotal;assetPlanItems.appendChild(row);
     }
     function readAssetPlanItems(){ return [...assetPlanItems.querySelectorAll(".plan-item-row")].map(row=>({id:row.dataset.id||uid(),name:row.querySelector(".plan-item-name").value.trim(),amount:Number(row.querySelector(".plan-item-amount").value||0)})).filter(i=>i.name&&i.amount>0); }
     function updateAssetPlanItemsTotal(){ if(typeof assetPlanItemsTotal!=="undefined")assetPlanItemsTotal.textContent=money([...assetPlanItems.querySelectorAll(".plan-item-amount")].reduce((s,i)=>s+Number(i.value||0),0)); }
