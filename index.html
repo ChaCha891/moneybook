@@ -39,6 +39,8 @@
     .app { max-width: 1200px; margin: 0 auto; padding: 20px; }
 
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .topbar-right { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+    .view-toggle { background:#7c3aed; white-space:nowrap; }
 
     .brand { display: flex; align-items: center; gap: 10px; }
     .brand-icon { width: 44px; height: 44px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
@@ -122,16 +124,50 @@
     .activity-toggle { display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; background:#f9fafb; color:var(--text); border:1px solid var(--line); }
     .account-manage-row { display:grid; grid-template-columns:1fr 140px 80px; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
 
+    /* 자산운용 프로젝트 */
+    .asset-view { display:none; }
+    .asset-hero { background:linear-gradient(135deg,#111827,#312e81 68%,#7c3aed); color:white; padding:26px; border-radius:22px; box-shadow:0 12px 30px rgba(17,24,39,.16); margin-bottom:16px; }
+    .asset-hero h2 { margin:4px 0 7px; font-size:30px; }
+    .asset-hero p { margin:0; color:#ddd6fe; }
+    .asset-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:18px; }
+    .asset-summary-box { padding:15px; border-radius:15px; background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.16); }
+    .asset-summary-box small { display:block; color:#ddd6fe; margin-bottom:6px; }
+    .asset-summary-box strong { display:block; font-size:24px; }
+    .asset-section { background:white; border-radius:18px; padding:18px; margin-bottom:14px; box-shadow:0 6px 20px rgba(0,0,0,.06); }
+    .asset-section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .asset-section-head h3 { margin:0; font-size:20px; }
+    .asset-live-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:17px; border:1px solid #fecaca; background:#fff7f7; border-radius:16px; }
+    .asset-live-card small { color:#6b7280; display:block; margin-bottom:4px; }
+    .asset-live-card strong { color:#dc2626; font-size:25px; }
+    .asset-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+    .asset-item-card { border:1px solid var(--line); border-radius:16px; padding:15px; background:#fff; }
+    .asset-item-card h4 { margin:0; font-size:17px; }
+    .asset-item-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .asset-kv { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid #f1f5f9; font-size:13px; }
+    .asset-kv:last-child { border-bottom:0; }
+    .asset-kv span { color:#6b7280; }
+    .asset-badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .asset-badge { display:inline-flex; padding:6px 9px; border-radius:999px; font-size:11px; font-weight:900; }
+    .asset-badge.red { background:#fee2e2; color:#b91c1c; }.asset-badge.orange { background:#ffedd5; color:#c2410c; }.asset-badge.green { background:#dcfce7; color:#15803d; }.asset-badge.purple { background:#ede9fe; color:#6d28d9; }
+    .asset-empty { padding:22px; text-align:center; border:1px dashed #cbd5e1; border-radius:15px; color:#64748b; background:#f8fafc; }
+    .plan-item-row { display:grid; grid-template-columns:1fr 160px 62px; gap:8px; align-items:end; padding:10px 0; border-bottom:1px solid var(--line); }
+    .plan-total { margin-top:12px; padding:13px; border-radius:13px; background:#f8fafc; display:flex; justify-content:space-between; font-weight:900; }
+
     @media (max-width: 768px) {
       .app { padding: 12px; }
       .summary { grid-template-columns: 1fr; }
       .form-grid, .history-tools { grid-template-columns: 1fr; }
-      .day { min-height: 96px; padding: 7px; }
-      .day-line { font-size: 11px; display: block; }
+      .day { min-height: 54px; padding: 8px; }
+      .day-line { display: none !important; }
+      .date-num { margin-bottom:0; text-align:center; }
       .entry-row { grid-template-columns: 1fr; gap: 4px; background: #f9fafb; border-radius: 12px; padding: 10px; margin: 8px 0; }
       .history-table { display: block; overflow-x: auto; white-space: nowrap; }
       .account-list { grid-template-columns:1fr 1fr; }
       .transfer-row, .account-manage-row { grid-template-columns:1fr; background:#f9fafb; border-radius:12px; padding:10px; margin:8px 0; }
+      .topbar-right { width:100%; justify-content:space-between; }
+      .asset-summary { grid-template-columns:1fr; }
+      .asset-hero { padding:20px; }.asset-hero h2 { font-size:25px; }
+      .plan-item-row { grid-template-columns:1fr 110px 54px; }
     }
 
     /* AI 빠른입력 / 월간보고서 */
@@ -149,15 +185,19 @@
     <div class="topbar">
       <div class="brand">
         <img id="appIcon" class="brand-icon" src="icon-192.png" alt="가계부 아이콘" />
-        <h1>가계부</h1>
+        <h1 id="mainViewTitle">가계부</h1>
       </div>
-      <div class="month-control">
-        <button class="light" onclick="moveMonth(-1)">◀</button>
-        <h2 id="monthTitle" style="margin:0;"></h2>
-        <button class="light" onclick="moveMonth(1)">▶</button>
+      <div class="topbar-right">
+        <div class="month-control" id="ledgerMonthControl">
+          <button class="light" onclick="moveMonth(-1)">◀</button>
+          <h2 id="monthTitle" style="margin:0;"></h2>
+          <button class="light" onclick="moveMonth(1)">▶</button>
+        </div>
+        <button id="viewToggleBtn" class="view-toggle" onclick="toggleMainView()">자산운용 프로젝트</button>
       </div>
     </div>
 
+    <div id="ledgerView">
     <div id="connectionStatus" class="connection-status"><span id="connectionMessage"></span><button class="light" onclick="retryConnection()">재연결</button></div>
 
 
@@ -179,11 +219,11 @@
         <div>
           <select id="accountGroupSelect" onchange="changeAccountGroup(this.value)" style="font-size:20px;font-weight:900;border:1px solid #e5e7eb;border-radius:12px;padding:9px 12px;background:white;min-width:210px;">
             <option value="cash">계좌·카드 잔액</option>
-            <option value="savings">적금 통장 조회</option>
+            <option value="repayments">상환금 리스트</option>
           </select>
           <small id="accountGroupHint" style="color:#6b7280;display:block;margin-top:6px;">계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.</small>
         </div>
-        <div class="actions" style="margin:0;"><button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button></div>
+        <div id="accountPanelActions" class="actions" style="margin:0;"><button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button></div>
       </div>
       <div id="accountList" class="account-list"></div>
       <div id="accountTransferList" class="transfer-list"></div>
@@ -203,6 +243,35 @@
       <div class="weekdays"><div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div></div>
       <div id="calendarDays" class="days"></div>
     </section>
+    </div>
+
+    <div id="assetProjectView" class="asset-view">
+      <section class="asset-hero">
+        <small style="font-weight:900;letter-spacing:.08em;color:#c4b5fd;">MY MONEY MANAGEMENT</small>
+        <h2>자산운용 프로젝트</h2>
+        <p>현재 자산과 상환 일정을 한눈에 보고, 월별로 내 돈의 쓰임을 직접 계획합니다.</p>
+        <div class="asset-summary">
+          <div class="asset-summary-box"><small>통장 잔액</small><strong id="assetBankBalance">0원</strong></div>
+          <div class="asset-summary-box"><small>상환 예정 건</small><strong id="assetDebtCount">0건</strong></div>
+          <div class="asset-summary-box"><small>이번달 예상 저축</small><strong id="assetExpectedSaving">계획 미등록</strong></div>
+        </div>
+      </section>
+
+      <section class="asset-section">
+        <div class="asset-section-head"><h3>이번 달 카드 현황</h3><small style="color:#6b7280;">가계부의 신용카드 사용 내역과 자동 연결</small></div>
+        <div class="asset-live-card"><div><small>신용카드 총 결제액</small><strong id="assetCreditTotal">0원</strong></div><span id="assetCreditBadge" class="asset-badge green">카드 정리 없음</span></div>
+      </section>
+
+      <section class="asset-section">
+        <div class="asset-section-head"><div><h3>상환 현황</h3><small style="color:#6b7280;">빌린 돈과 할부 상환 일정을 관리합니다.</small></div><button onclick="openAssetDebtModal()">+ 상환항목 추가</button></div>
+        <div id="assetDebtList" class="asset-grid"></div>
+      </section>
+
+      <section class="asset-section">
+        <div class="asset-section-head"><div><h3>월별 자산운용 계획</h3><small style="color:#6b7280;">월별 수입과 빠져나갈 항목을 직접 구성합니다.</small></div><button onclick="openAssetPlanModal()">+ 월별 계획 추가</button></div>
+        <div id="assetPlanList" class="asset-grid"></div>
+      </section>
+    </div>
   </div>
 
   <div id="entryModal" class="modal-backdrop"><div class="modal">
@@ -308,11 +377,39 @@
     <div class="form-grid">
       <div><label>새 계좌·카드 이름</label><input id="newAccountName" placeholder="예: 국민은행 통장" /></div>
       <div><label>시작 잔액</label><input type="number" id="newAccountBalance" value="0" /></div>
-      <div><label>계좌 구분</label><select id="newAccountGroup"><option value="cash">계좌·카드</option><option value="savings">적금 통장</option></select></div>
+      <div><label>계좌 구분</label><select id="newAccountGroup"><option value="cash">계좌·카드</option></select></div>
     </div>
     <div class="modal-actions"><button onclick="addAccount()">추가</button></div>
     <div id="accountManageList" class="entry-list"></div>
     <div class="modal-actions"><button class="light" onclick="closeModal('accountManageModal')">닫기</button></div>
+  </div></div>
+
+  <div id="assetDebtModal" class="modal-backdrop"><div class="modal">
+    <h2 id="assetDebtModalTitle">상환항목 추가</h2>
+    <input type="hidden" id="assetDebtId" />
+    <div class="form-grid">
+      <div><label>상환 항목명</label><input id="assetDebtName" placeholder="예: 엄마에게 빌린 돈, 자동차 할부" /></div>
+      <div><label>상환 시작일</label><input type="date" id="assetDebtStartDate" /></div>
+      <div><label>빌린 금액</label><input type="number" id="assetDebtPrincipal" min="0" placeholder="예: 5000000" /></div>
+      <div><label>상환 기간</label><input type="number" id="assetDebtMonths" min="1" placeholder="예: 6" /><small style="color:#6b7280;">개월 단위로 입력</small></div>
+      <div><label>매월 납부할 금액</label><input type="number" id="assetDebtMonthly" min="0" placeholder="비워두면 자동 계산" /></div>
+      <div><label>총 이자·수수료</label><input type="number" id="assetDebtInterest" min="0" value="0" placeholder="이자가 없으면 0" /></div>
+      <div class="full"><label>메모</label><textarea id="assetDebtMemo" placeholder="상환 방법이나 특이사항을 적어두세요."></textarea></div>
+    </div>
+    <div class="modal-actions"><button class="danger" id="deleteAssetDebtBtn" onclick="deleteAssetDebt()" style="display:none;">삭제</button><button class="light" onclick="closeModal('assetDebtModal')">닫기</button><button onclick="saveAssetDebt()">저장</button></div>
+  </div></div>
+
+  <div id="assetPlanModal" class="modal-backdrop"><div class="modal">
+    <h2 id="assetPlanModalTitle">월별 자산운용 계획 추가</h2>
+    <input type="hidden" id="assetPlanId" />
+    <div class="form-grid">
+      <div><label>계획 월</label><input type="month" id="assetPlanMonth" /></div>
+      <div><label>예상 수입</label><input type="number" id="assetPlanIncome" min="0" placeholder="예: 3496800" /></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;"><div><strong>빠져나갈 항목</strong><div style="font-size:12px;color:#6b7280;margin-top:3px;">카드값과 등록된 상환금은 자동으로 합산됩니다.</div></div><button class="light" onclick="addAssetPlanItemRow()">+ 항목 추가</button></div>
+    <div id="assetPlanItems"></div>
+    <div class="plan-total"><span>직접 입력한 지출 합계</span><strong id="assetPlanItemsTotal">0원</strong></div>
+    <div class="modal-actions"><button class="danger" id="deleteAssetPlanBtn" onclick="deleteAssetPlan()" style="display:none;">삭제</button><button class="light" onclick="closeModal('assetPlanModal')">닫기</button><button onclick="saveAssetPlan()">저장</button></div>
   </div></div>
 
 
@@ -340,15 +437,22 @@
     let accountActivityExpanded = false;
     let cloudOnline = true;
     let accountConfigId = null;
+    let assetConfigId = null;
+    let mainView = "ledger";
 
     const ACCOUNT_STORE = "moneybook_accounts_v2";
     const CACHE_STORE = "moneybook_offline_cache_v2";
     const AI_MEMORY_STORE = "moneybook_ai_memory_v1";
+    const ASSET_STORE = "moneybook_asset_project_v1";
     // Supabase Edge Function을 배포하면 true AI 분류가 활성화됩니다. 비어 있으면 학습기록+로컬 분석으로 동작합니다.
     const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/moneybook-ai`;
 
     const ACCOUNT_CONFIG_CATEGORY = "__MONEYBOOK_ACCOUNT_CONFIG__";
+    const ASSET_CONFIG_CATEGORY = "__MONEYBOOK_ASSET_CONFIG__";
     const CREDIT_CATEGORY_PREFIX = "__CREDIT_CARD__::";
+    const savedAssetProject = (()=>{ try { return JSON.parse(localStorage.getItem(ASSET_STORE) || "{}"); } catch { return {}; } })();
+    let assetDebts = Array.isArray(savedAssetProject.debts) ? savedAssetProject.debts : [];
+    let assetPlans = Array.isArray(savedAssetProject.plans) ? savedAssetProject.plans : [];
     let accounts = JSON.parse(localStorage.getItem(ACCOUNT_STORE) || "null") || [
       { id: "nh_check", name: "농협 체크카드", openingBalance: 0, active: true, group: "cash" },
       { id: "toss_check", name: "토스체크카드", openingBalance: 0, active: true, group: "cash" },
@@ -390,7 +494,7 @@
     function saveAccounts() { ensureCreditAccount(); localStorage.setItem(ACCOUNT_STORE, JSON.stringify(accounts)); persistAccounts(); }
     function accountGroup(a) { return a?.group === "savings" ? "savings" : "cash"; }
     function activeAccounts() { return accounts.filter(a => a.active !== false); }
-    function visibleGroupAccounts() { return activeAccounts().filter(a => accountGroup(a) === selectedAccountGroup); }
+    function visibleGroupAccounts() { return activeAccounts().filter(a => selectedAccountGroup === "cash" && accountGroup(a) === "cash"); }
     function accountName(id) { return accounts.find(a => a.id === id)?.name || "계좌 미지정"; }
     function cacheData(patch) { const old = JSON.parse(localStorage.getItem(CACHE_STORE) || "{}"); localStorage.setItem(CACHE_STORE, JSON.stringify({ ...old, ...patch })); }
     function cachedData() { return JSON.parse(localStorage.getItem(CACHE_STORE) || "{}"); }
@@ -414,9 +518,9 @@
       }
     }
 
-    async function init() { setupPWA(); if (!db) showOffline(new Error("연결 모듈을 불러오지 못했습니다")); await loadCategories(); await loadAccounts(); await loadFixedItems(); await loadData(); }
+    async function init() { setupPWA(); if (!db) showOffline(new Error("연결 모듈을 불러오지 못했습니다")); await loadCategories(); await loadAccounts(); await loadAssetProject(); await loadFixedItems(); await loadData(); }
 
-    async function retryConnection() { if (!db) { showOffline(new Error("연결 모듈을 불러오지 못했습니다")); return; } cloudOnline = true; await loadCategories(); await loadAccounts(); await loadFixedItems(); await loadData(); }
+    async function retryConnection() { if (!db) { showOffline(new Error("연결 모듈을 불러오지 못했습니다")); return; } cloudOnline = true; await loadCategories(); await loadAccounts(); await loadAssetProject(); await loadFixedItems(); await loadData(); }
 
     async function loadAccounts() {
       if (!cloudOnline || !db) { ensureCreditAccount(); renderAccounts(); return; }
@@ -438,6 +542,33 @@
       } catch(error){showOffline(error);}
     }
 
+    async function loadAssetProject() {
+      const applyLocal = () => { const saved=(()=>{try{return JSON.parse(localStorage.getItem(ASSET_STORE)||"{}")}catch{return {}}})(); assetDebts=Array.isArray(saved.debts)?saved.debts:assetDebts; assetPlans=Array.isArray(saved.plans)?saved.plans:assetPlans; };
+      if (!cloudOnline || !db) { applyLocal(); return; }
+      try {
+        const { data, error } = await db.from("moneybook_entries").select("*").eq("category", ASSET_CONFIG_CATEGORY).limit(1);
+        if (error) throw error;
+        if (data?.length) {
+          assetConfigId=data[0].id;
+          const meta=entryMeta(data[0]);
+          assetDebts=Array.isArray(meta.debts)?meta.debts:[];
+          assetPlans=Array.isArray(meta.plans)?meta.plans:[];
+          localStorage.setItem(ASSET_STORE,JSON.stringify({debts:assetDebts,plans:assetPlans}));
+        } else applyLocal();
+      } catch(error) { showOffline(error); applyLocal(); }
+    }
+
+    async function persistAssetProject() {
+      localStorage.setItem(ASSET_STORE,JSON.stringify({debts:assetDebts,plans:assetPlans}));
+      if (!cloudOnline || !db) { renderAssetProject(); if(selectedAccountGroup==="repayments") renderAccounts(); return; }
+      const payload={entry_date:"1900-01-01",type:"income",category:ASSET_CONFIG_CATEGORY,amount:1,is_fixed:false,memo:packMemo("",{kind:"asset_config",debts:assetDebts,plans:assetPlans})};
+      try {
+        if(assetConfigId){const {error}=await db.from("moneybook_entries").update(payload).eq("id",assetConfigId);if(error)throw error;}
+        else{const {data,error}=await db.from("moneybook_entries").insert(payload).select().single();if(error)throw error;assetConfigId=data.id;}
+      } catch(error){showOffline(error);}
+      renderAssetProject(); if(selectedAccountGroup==="repayments") renderAccounts();
+    }
+
     async function loadCategories() {
       if (!cloudOnline || !db) { categories = (cachedData().categories || defaultCategories).map((c,i)=>({...c,id:c.id||`local_${c.type}_${i}`})); renderMajorCategorySelect(); renderCategoryManager(); return; }
       try {
@@ -456,18 +587,18 @@
     }
 
     async function loadData() {
-      if (!cloudOnline || !db) { allEntries = cachedData().entries || allEntries || []; const { start, end } = monthRange(); entries = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end); renderAll(); return; }
+      if (!cloudOnline || !db) { allEntries = (cachedData().entries || allEntries || []).filter(e=>e.category!==ACCOUNT_CONFIG_CATEGORY&&e.category!==ASSET_CONFIG_CATEGORY); const { start, end } = monthRange(); entries = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end); renderAll(); return; }
       try {
       const { start, end } = monthRange();
       const { data, error } = await db.from("moneybook_entries").select("*").order("entry_date", { ascending: true }).order("created_at", { ascending: true });
       if (error) throw error;
-      allEntries = (data || []).filter(e => e.category !== ACCOUNT_CONFIG_CATEGORY); entries = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end); cacheData({ entries: allEntries }); showOnline(); renderAll();
+      allEntries = (data || []).filter(e => e.category !== ACCOUNT_CONFIG_CATEGORY && e.category !== ASSET_CONFIG_CATEGORY); entries = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end); cacheData({ entries: allEntries }); showOnline(); renderAll();
       } catch (error) {
         showOffline(error); allEntries = cachedData().entries || []; const { start, end } = monthRange(); entries = allEntries.filter(e => e.entry_date >= start && e.entry_date <= end); renderAll();
       }
     }
 
-    function renderAll() { renderSummary(); renderCalendar(); renderAccounts(); }
+    function renderAll() { renderSummary(); renderCalendar(); renderAccounts(); renderAssetProject(); }
     function entryCategoryName(e) {
       return String(e.category || "").trim();
     }
@@ -664,12 +795,20 @@
     }
 
     function renderAccounts() {
-      const active = visibleGroupAccounts();
       if (accountGroupSelect) accountGroupSelect.value = selectedAccountGroup;
-      if (accountGroupHint) accountGroupHint.textContent = selectedAccountGroup === "savings" ? "적금 통장을 선택하면 현재 선택한 달의 내역을 볼 수 있습니다." : "계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.";
+      if (selectedAccountGroup === "repayments") {
+        accountGroupHint.textContent = "등록한 상환항목과 월 납부예정액을 확인할 수 있습니다.";
+        accountPanelActions.innerHTML = `<button onclick="openAssetDebtModal()">+ 상환항목 추가</button>`;
+        accountList.innerHTML = assetDebts.length ? assetDebts.map(debtCardHtml).join("") : `<div class="asset-empty" style="grid-column:1/-1;">상환 예정 금액 없음</div>`;
+        accountTransferList.innerHTML = "";
+        return;
+      }
+      const active = visibleGroupAccounts();
+      accountGroupHint.textContent = "계좌를 선택하면 현재 선택한 달의 내역을 볼 수 있습니다.";
+      accountPanelActions.innerHTML = `<button style="background:#7c3aed;" onclick="openTransferModal()">이체 입력</button><button class="secondary" onclick="openAccountManageModal()">계좌 관리</button>`;
       if (selectedAccountId !== "all" && !active.some(a => a.id === selectedAccountId)) selectedAccountId = "all";
       const total = active.reduce((sum, a) => sum + accountBalance(a.id), 0);
-      const totalLabel = selectedAccountGroup === "savings" ? "전체 적금 통장" : "전체 계좌·카드";
+      const totalLabel = "전체 계좌·카드";
       accountList.innerHTML = `<button class="account-box ${selectedAccountId === "all" ? "active" : ""}" onclick="selectAccount('all')"><small>${totalLabel}</small><strong class="${total < 0 ? "expense" : "balance"}">${money(total)}</strong></button>` + active.map(a => {
         const value = accountBalance(a.id);
         return `<button class="account-box ${selectedAccountId === a.id ? "active" : ""}" onclick="selectAccount('${a.id}')"><small>${escapeHtml(a.name)}</small><strong class="${value < 0 ? "expense" : "balance"}">${money(value)}</strong></button>`;
@@ -677,7 +816,7 @@
       renderAccountTransfers();
     }
 
-    function changeAccountGroup(group) { selectedAccountGroup = group === "savings" ? "savings" : "cash"; selectedAccountId = "all"; accountActivityExpanded = false; renderAccounts(); }
+    function changeAccountGroup(group) { selectedAccountGroup = group === "repayments" ? "repayments" : "cash"; selectedAccountId = "all"; accountActivityExpanded = false; renderAccounts(); }
     function selectAccount(id) { selectedAccountId = id; accountActivityExpanded = false; renderAccounts(); }
     function toggleAccountActivity() { accountActivityExpanded = !accountActivityExpanded; renderAccountTransfers(); }
 
@@ -689,7 +828,7 @@
         .sort((a,b) => a.entry_date === b.entry_date ? String(b.created_at||"").localeCompare(String(a.created_at||"")) : b.entry_date.localeCompare(a.entry_date));
       if (selectedAccountId !== "all") list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? m.fromAccountId === selectedAccountId || m.toAccountId === selectedAccountId : m.accountId === selectedAccountId; });
       else { const ids = new Set(visibleGroupAccounts().map(a=>a.id)); list = list.filter(e => { const m=entryMeta(e); return isTransferEntry(e) ? ids.has(m.fromAccountId) || ids.has(m.toAccountId) : ids.has(m.accountId); }); }
-      const title = selectedAccountId === "all" ? (selectedAccountGroup === "savings" ? "이번 달 전체 적금 통장 내역" : "이번 달 전체 계좌·카드 내역") : `${accountName(selectedAccountId)} 이번 달 내역`;
+      const title = selectedAccountId === "all" ? "이번 달 전체 계좌·카드 내역" : `${accountName(selectedAccountId)} 이번 달 내역`;
       const toggle=`<button class="activity-toggle" onclick="toggleAccountActivity()"><span>${escapeHtml(title)} <small style="color:#6b7280;">(${list.length}건)</small></span><strong>${accountActivityExpanded?"▲ 접기":"▼ 내역 보기"}</strong></button>`;
       if(!accountActivityExpanded){accountTransferList.innerHTML=toggle;return;}
       const rows=list.length?list.map(e=>{
@@ -731,9 +870,9 @@
       closeModal("transferModal"); await loadData();
     }
 
-    function openAccountManageModal() { newAccountGroup.value = selectedAccountGroup; renderAccountManager(); accountManageModal.classList.add("show"); }
+    function openAccountManageModal() { newAccountGroup.value = "cash"; renderAccountManager(); accountManageModal.classList.add("show"); }
     function renderAccountManager() { accountManageList.innerHTML = activeAccounts().map(a => a.fixedCreditCard?`<div class="account-manage-row"><input value="신용카드" disabled><input type="number" value="0" disabled><button disabled>고정</button></div>`:`<div class="account-manage-row"><input value="${escapeHtml(a.name)}" onchange="updateAccount('${a.id}','name',this.value)"><input type="number" value="${Number(a.openingBalance || 0)}" onchange="updateAccount('${a.id}','openingBalance',this.value)"><button class="danger" onclick="removeAccount('${a.id}')">제거</button><small style="grid-column:1/-1;color:#6b7280;">${accountGroup(a)==="savings"?"적금 통장":"계좌·카드"}</small></div>`).join(""); }
-    function addAccount() { const name=newAccountName.value.trim(); if(!name){alert("계좌·카드 이름을 입력하세요.");return;} if(activeAccounts().some(a=>a.name===name)){alert("같은 이름이 이미 있습니다.");return;} accounts.push({id:uid(),name,openingBalance:Number(newAccountBalance.value||0),active:true,group:newAccountGroup.value==="savings"?"savings":"cash"}); saveAccounts(); newAccountName.value="";newAccountBalance.value=0;renderAccountManager();renderAccounts(); }
+    function addAccount() { const name=newAccountName.value.trim(); if(!name){alert("계좌·카드 이름을 입력하세요.");return;} if(activeAccounts().some(a=>a.name===name)){alert("같은 이름이 이미 있습니다.");return;} accounts.push({id:uid(),name,openingBalance:Number(newAccountBalance.value||0),active:true,group:"cash"}); saveAccounts(); newAccountName.value="";newAccountBalance.value=0;renderAccountManager();renderAccounts(); }
     function updateAccount(id,key,value) { const a=accounts.find(x=>x.id===id); if(!a||a.fixedCreditCard)return; a[key]=key==="openingBalance"?Number(value||0):String(value).trim(); saveAccounts(); renderAccounts(); }
     function removeAccount(id) { const a=accounts.find(x=>x.id===id); if(!a)return;if(a.fixedCreditCard){alert("신용카드는 고정 계좌라 제거할 수 없습니다.");return;}if(!confirm(`'${a.name}'을 목록에서 제거할까요? 기존 내역은 유지됩니다.`))return; a.active=false; saveAccounts(); renderAccountManager(); renderAccounts(); }
 
@@ -1040,6 +1179,101 @@
       }
       return _originalSaveEntry();
     }
+
+    // ---------- 자산운용 프로젝트 ----------
+    function currentMonthKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+    function monthAddKey(key,delta){ const [y,m]=String(key).split("-").map(Number),d=new Date(y,m-1+delta,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+    function monthText(key){ if(!key)return "-"; const [y,m]=String(key).split("-"); return `${y}년 ${Number(m)}월`; }
+    function monthIndexBetween(from,to){ const [fy,fm]=String(from).split("-").map(Number),[ty,tm]=String(to).split("-").map(Number); return (ty-fy)*12+(tm-fm); }
+    function debtStartMonth(debt){ return String(debt.startDate||currentMonthKey()).slice(0,7); }
+    function debtEndMonth(debt){ return monthAddKey(debtStartMonth(debt),Math.max(1,Number(debt.months)||1)-1); }
+    function debtMonthlyAmount(debt){ const months=Math.max(1,Number(debt.months)||1),total=Number(debt.principal||0)+Number(debt.interest||0); return Number(debt.monthly||0)>0?Number(debt.monthly):Math.ceil(total/months); }
+    function debtPaymentForMonth(debt,key){
+      const index=monthIndexBetween(debtStartMonth(debt),key),months=Math.max(1,Number(debt.months)||1);
+      if(index<0||index>=months)return 0;
+      const total=Number(debt.principal||0)+Number(debt.interest||0),monthly=debtMonthlyAmount(debt);
+      return index===months-1?Math.max(0,total-monthly*(months-1)):Math.min(monthly,Math.max(0,total-monthly*index));
+    }
+    function activeDebtsForMonth(key){ return assetDebts.filter(d=>debtStartMonth(d)<=key&&debtEndMonth(d)>=key); }
+    function creditCardTotalForMonth(key){ return allEntries.filter(e=>String(e.entry_date||"").slice(0,7)===key&&isCreditCardEntry(e)).reduce((s,e)=>s+Number(e.amount||0),0); }
+    function liveBankBalance(){ return activeAccounts().filter(a=>accountGroup(a)==="cash"&&!a.fixedCreditCard).reduce((s,a)=>s+accountBalance(a.id),0); }
+    function assetPlanCalculation(plan){
+      const month=plan?.month||currentMonthKey(),itemsTotal=(plan?.items||[]).reduce((s,i)=>s+Number(i.amount||0),0);
+      const cardTotal=creditCardTotalForMonth(month),debtTotal=activeDebtsForMonth(month).reduce((s,d)=>s+debtPaymentForMonth(d,month),0),income=Number(plan?.income||0);
+      return {month,itemsTotal,cardTotal,debtTotal,income,saving:income-itemsTotal-cardTotal-debtTotal};
+    }
+    function toggleMainView(){
+      mainView=mainView==="ledger"?"asset":"ledger";
+      ledgerView.style.display=mainView==="ledger"?"block":"none";
+      assetProjectView.style.display=mainView==="asset"?"block":"none";
+      ledgerMonthControl.style.display=mainView==="ledger"?"flex":"none";
+      mainViewTitle.textContent=mainView==="ledger"?"가계부":"자산운용";
+      viewToggleBtn.textContent=mainView==="ledger"?"자산운용 프로젝트":"가계부로 돌아가기";
+      if(mainView==="asset")renderAssetProject();
+      window.scrollTo({top:0,behavior:"smooth"});
+    }
+    function debtCardHtml(debt){
+      const end=debtEndMonth(debt),monthly=debtMonthlyAmount(debt),total=Number(debt.principal||0)+Number(debt.interest||0);
+      return `<article class="asset-item-card"><div class="asset-item-head"><div><h4>${escapeHtml(debt.name||"이름 없는 상환")}</h4><div class="asset-badges"><span class="asset-badge orange">${monthText(end)} 완납</span></div></div><button class="light" onclick="openAssetDebtModal('${debt.id}')">수정</button></div><div style="margin-top:10px"><div class="asset-kv"><span>빌린 금액</span><strong>${money(debt.principal)}</strong></div><div class="asset-kv"><span>상환 기간</span><strong>${Number(debt.months)||1}개월</strong></div><div class="asset-kv"><span>매월 납부 예정</span><strong>${money(monthly)}</strong></div><div class="asset-kv"><span>이자·수수료</span><strong>${money(debt.interest)}</strong></div><div class="asset-kv"><span>총 상환 예정액</span><strong>${money(total)}</strong></div></div>${debt.memo?`<p style="font-size:12px;color:#6b7280;margin:10px 0 0;">${escapeHtml(debt.memo)}</p>`:""}</article>`;
+    }
+    function planBadges(calc){
+      const badges=[];
+      if(calc.cardTotal>0)badges.push(`<span class="asset-badge red">카드 정리 필요</span>`);
+      if(calc.debtTotal>0)badges.push(`<span class="asset-badge orange">상환중</span>`);
+      if(!badges.length)badges.push(`<span class="asset-badge green">운용 안정</span>`);
+      return badges.join("");
+    }
+    function planCardHtml(plan){
+      const c=assetPlanCalculation(plan),items=(plan.items||[]).map(i=>`<div class="asset-kv"><span>${escapeHtml(i.name||"지출")}</span><strong>${money(i.amount)}</strong></div>`).join("");
+      return `<article class="asset-item-card"><div class="asset-item-head"><div><h4>${monthText(plan.month)}</h4><div class="asset-badges">${planBadges(c)}</div></div><button class="light" onclick="openAssetPlanModal('${plan.id}')">수정</button></div><div style="margin-top:10px"><div class="asset-kv"><span>예상 수입</span><strong class="income">${money(c.income)}</strong></div>${items}<div class="asset-kv"><span>신용카드 자동반영</span><strong>${money(c.cardTotal)}</strong></div><div class="asset-kv"><span>상환금 자동반영</span><strong>${money(c.debtTotal)}</strong></div><div class="asset-kv"><span>예상 저축</span><strong class="${c.saving<0?"expense":"balance"}">${money(c.saving)}</strong></div></div></article>`;
+    }
+    function renderAssetProject(){
+      if(typeof assetBankBalance==="undefined")return;
+      const month=currentMonthKey(),active=assetDebts.filter(d=>debtEndMonth(d)>=month),plan=assetPlans.find(p=>p.month===month),calc=plan?assetPlanCalculation(plan):null,card=creditCardTotalForMonth(month);
+      assetBankBalance.textContent=money(liveBankBalance());
+      assetDebtCount.textContent=`${active.length}건`;
+      assetExpectedSaving.textContent=calc?money(calc.saving):"계획 미등록";
+      assetExpectedSaving.style.color=calc&&calc.saving<0?"#fecaca":"white";
+      assetCreditTotal.textContent=money(card);
+      assetCreditBadge.textContent=card>0?"카드 정리 필요":"카드 정리 없음";
+      assetCreditBadge.className=`asset-badge ${card>0?"red":"green"}`;
+      assetDebtList.innerHTML=assetDebts.length?assetDebts.map(debtCardHtml).join(""):`<div class="asset-empty" style="grid-column:1/-1;">상환 예정 금액 없음</div>`;
+      const plans=[...assetPlans].sort((a,b)=>a.month.localeCompare(b.month));
+      assetPlanList.innerHTML=plans.length?plans.map(planCardHtml).join(""):`<div class="asset-empty" style="grid-column:1/-1;">등록된 월별 계획이 없습니다.<br>‘월별 계획 추가’를 눌러 이번 달부터 계획해보세요.</div>`;
+    }
+    function openAssetDebtModal(id=""){
+      const debt=assetDebts.find(d=>String(d.id)===String(id));
+      assetDebtModalTitle.textContent=debt?"상환항목 수정":"상환항목 추가";
+      assetDebtId.value=debt?.id||""; assetDebtName.value=debt?.name||""; assetDebtStartDate.value=debt?.startDate||ymd(new Date()); assetDebtPrincipal.value=debt?.principal||""; assetDebtMonths.value=debt?.months||""; assetDebtMonthly.value=debt?.monthly||""; assetDebtInterest.value=debt?.interest||0; assetDebtMemo.value=debt?.memo||"";
+      deleteAssetDebtBtn.style.display=debt?"inline-block":"none"; assetDebtModal.classList.add("show");
+    }
+    function saveAssetDebt(){
+      const id=assetDebtId.value,name=assetDebtName.value.trim(),startDate=assetDebtStartDate.value,principal=Number(assetDebtPrincipal.value),months=Math.max(1,Number(assetDebtMonths.value)||0),monthly=Number(assetDebtMonthly.value||0),interest=Number(assetDebtInterest.value||0),memo=assetDebtMemo.value.trim();
+      if(!name||!startDate||principal<=0||!Number(assetDebtMonths.value)){alert("상환 항목명, 시작일, 빌린 금액, 상환 기간을 확인하세요.");return;}
+      const value={id:id||uid(),name,startDate,principal,months,monthly,interest,memo};
+      if(id){const index=assetDebts.findIndex(d=>String(d.id)===String(id));if(index>=0)assetDebts[index]=value;}else assetDebts.push(value);
+      closeModal("assetDebtModal");persistAssetProject();
+    }
+    function deleteAssetDebt(){ const id=assetDebtId.value;if(!id||!confirm("이 상환항목을 삭제할까요?"))return;assetDebts=assetDebts.filter(d=>String(d.id)!==String(id));closeModal("assetDebtModal");persistAssetProject(); }
+    function openAssetPlanModal(id=""){
+      const plan=assetPlans.find(p=>String(p.id)===String(id));
+      assetPlanModalTitle.textContent=plan?"월별 자산운용 계획 수정":"월별 자산운용 계획 추가";
+      assetPlanId.value=plan?.id||"";assetPlanMonth.value=plan?.month||currentMonthKey();assetPlanIncome.value=plan?.income||"";deleteAssetPlanBtn.style.display=plan?"inline-block":"none";assetPlanItems.innerHTML="";
+      const items=plan?.items?.length?plan.items:[{id:uid(),name:"",amount:""}];items.forEach(addAssetPlanItemRow);updateAssetPlanItemsTotal();assetPlanModal.classList.add("show");
+    }
+    function addAssetPlanItemRow(item={}){
+      const row=document.createElement("div");row.className="plan-item-row";row.dataset.id=item.id||uid();row.innerHTML=`<div><label>항목명</label><input class="plan-item-name" value="${escapeHtml(item.name||"")}" placeholder="예: 고정비, 학원비, 생활비" /></div><div><label>금액</label><input class="plan-item-amount" type="number" min="0" value="${Number(item.amount)||""}" placeholder="0" /></div><button class="danger" type="button">삭제</button>`;row.querySelector("button").onclick=()=>{row.remove();updateAssetPlanItemsTotal()};row.querySelector(".plan-item-amount").oninput=updateAssetPlanItemsTotal;assetPlanItems.appendChild(row);
+    }
+    function readAssetPlanItems(){ return [...assetPlanItems.querySelectorAll(".plan-item-row")].map(row=>({id:row.dataset.id||uid(),name:row.querySelector(".plan-item-name").value.trim(),amount:Number(row.querySelector(".plan-item-amount").value||0)})).filter(i=>i.name&&i.amount>0); }
+    function updateAssetPlanItemsTotal(){ if(typeof assetPlanItemsTotal!=="undefined")assetPlanItemsTotal.textContent=money([...assetPlanItems.querySelectorAll(".plan-item-amount")].reduce((s,i)=>s+Number(i.value||0),0)); }
+    function saveAssetPlan(){
+      const id=assetPlanId.value,month=assetPlanMonth.value,income=Number(assetPlanIncome.value||0),items=readAssetPlanItems();
+      if(!month||income<=0){alert("계획 월과 예상 수입을 확인하세요.");return;}
+      if(!id&&assetPlans.some(p=>p.month===month)){alert("해당 월의 계획이 이미 있습니다. 기존 계획을 수정해주세요.");return;}
+      const value={id:id||uid(),month,income,items};if(id){const index=assetPlans.findIndex(p=>String(p.id)===String(id));if(index>=0)assetPlans[index]=value;}else assetPlans.push(value);
+      closeModal("assetPlanModal");persistAssetProject();
+    }
+    function deleteAssetPlan(){ const id=assetPlanId.value;if(!id||!confirm("이 월별 계획을 삭제할까요?"))return;assetPlans=assetPlans.filter(p=>String(p.id)!==String(id));closeModal("assetPlanModal");persistAssetProject(); }
 
     // ---------- 월간 보고서 / CSV / PDF 인쇄 ----------
     function monthlyReportData(){
