@@ -26,7 +26,7 @@
 <section class="panel"><div class="head"><div><h2>월별 자금 흐름</h2><p>현재 잔액을 시작점으로 예정된 항목을 더하고 뺀 예상치입니다. 금액을 클릭하면 항목별 내역을 볼 수 있습니다.</p></div><div class="actions"><input type="month" id="viewMonth" aria-label="조회 시작 월" style="width:155px"><select id="monthsCount" aria-label="표시 개월 수" style="width:115px"><option value="6">6개월</option><option value="12">12개월</option></select></div></div><div class="monthly" id="monthlyTable"></div><div id="monthDetail" class="breakdown"></div></section>
 <div class="notice" id="spendableNotice"></div>
 <section class="panel"><div class="head"><div><h2>내 항목</h2><p>빚, 주식계좌 목표, 예정 지출과 수입을 직접 관리합니다.</p></div><button id="addBtn">+ 항목 추가</button></div><div class="item-list" id="itemList"></div></section>
-<section class="panel"><div class="head"><div><h2>예정 항목</h2><p>이번 달이 아닌 미래 월에 처리할 항목입니다. 예정 상태에서는 잔액 처리 버튼 없이 계획만 표시합니다.</p></div></div><div class="item-list" id="assumptions"></div></section>
+<section class="panel"><div class="head"><div><h2>예정 항목</h2><p>아직 시작 월이 오지 않은 항목입니다. 시작 월이 되면 자동으로 내 항목으로 이동하고 진행률과 처리 기능이 표시됩니다.</p></div></div><div class="item-list" id="assumptions"></div></section>
 </main>
 <div class="modal" id="settingsModal"><div class="dialog"><h2>기본 설정</h2><div class="fields">
 <div class="field"><label for="sBalance">현재 현금 잔액</label><input id="sBalance" type="number" min="0" step="1"><small>입금과 지출이 반영된 실제 통장 잔액을 입력해 주세요.</small></div>
@@ -132,9 +132,11 @@ function itemDisplayMonth(item){
   return unpaid.find(k=>k>=cur)||unpaid[0]||item.start||cur;
 }
 function isScheduledItem(item){
-  const cur=todayMonth(), events=state.itemPayments[item.id]||{}, schedule=adjustedSchedule(item);
-  if(nonneg(schedule[cur])>0&&!events[cur])return false;
-  return Object.keys(schedule).some(k=>k>cur&&nonneg(schedule[k])>0&&!events[k]);
+  const cur=todayMonth();
+  // '예정 항목'은 아직 시작 월 자체가 오지 않은 항목만 표시한다.
+  // 시작 월이 이번 달 또는 과거라면, 이번 달 납부 예정액이 없더라도 계속 '내 항목'에 남긴다.
+  // 따라서 한 번 시작된 빚/목표의 진행률 게이지와 기존 처리 기록이 미래 납부월 때문에 사라지지 않는다.
+  return Boolean(item.start && item.start>cur);
 }
 function renderItems(){
   const labels={debt:'빚',goal:'저축·투자',expense:'일회성 지출',income:'일회성 수입',recurring:'반복 지출'};
@@ -166,7 +168,7 @@ function renderAssumptions(){
   $('assumptions').innerHTML=items.length?items.map(item=>{
     const month=itemDisplayMonth(item),amount=nonneg(adjustedSchedule(item)[month])||nonneg(item.amount);
     return `<article class="item"><div class="item-top"><div><span class="tag ${item.type==='debt'?'red':item.type==='goal'?'green':''}">${labels[item.type]||'항목'}</span><h3>${esc(item.name)}</h3></div><button class="ghost" data-scheduled-edit="${esc(item.id)}">수정</button></div><div class="amount">${won(amount)}</div><p>${monthName(month)} 처리 예정${item.amount!==amount?` · 전체 ${won(item.amount)}`:''}</p>${item.note?`<p>${esc(item.note)}</p>`:''}<div class="status-line">예정 항목 · 해당 월이 되면 ‘내 항목’으로 이동합니다.</div></article>`;
-  }).join(''):'<div class="empty">이번 달 이후로 예정된 항목이 없습니다.</div>';
+  }).join(''):'<div class="empty">아직 시작 전인 예정 항목이 없습니다.</div>';
   document.querySelectorAll('[data-scheduled-edit]').forEach(b=>b.onclick=()=>openItem(b.dataset.scheduledEdit));
 }
 function addSalaryRow(start='',amount=''){let row=document.createElement('div');row.className='salary-row';row.innerHTML=`<input class="salary-start" type="month" aria-label="급여 적용 시작 월" value="${esc(start)}"><input class="salary-amount" type="number" min="1" step="1" aria-label="예상 실수령액" placeholder="실수령액" value="${amount===''?'':nonneg(amount)}"><button class="danger" type="button">삭제</button>`;row.querySelector('button').onclick=()=>{if($('salaryRows').children.length<=1){alert('급여 구간은 최소 하나 필요합니다.');return}row.remove();updateAllowancePreview()};row.querySelectorAll('input').forEach(el=>el.addEventListener('input',updateAllowancePreview));$('salaryRows').appendChild(row)}
