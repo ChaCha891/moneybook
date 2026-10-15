@@ -274,7 +274,7 @@ $('viewMonth').onchange=e=>{selectedMonth=e.target.value;renderTable()};$('month
 $('iType').onchange=updateFields;$('iMethod').onchange=updateFields;
 for(let field of ['iName','iAmount','iPaid','iStart','iMonthly','iEnd','iCustom'])$(field).addEventListener('input',updatePreview);
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove('show'));
-document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
+// 팝업 배경 클릭으로는 닫지 않음: 취소 또는 저장 버튼으로만 닫습니다.
 
 let ledgerSelectedDate=new Date().toLocaleDateString('en-CA'),ledgerViewedMonth=todayMonth();
 function showPage(page){$('assetPage').style.display=page==='asset'?'':'none';$('ledgerPage').style.display=page==='ledger'?'':'none';$('assetTab').classList.toggle('active',page==='asset');$('ledgerTab').classList.toggle('active',page==='ledger');if(page==='ledger')renderLedger()}
